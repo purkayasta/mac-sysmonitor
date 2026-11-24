@@ -76,9 +76,9 @@ bash scripts/update-app.sh --app dist/SysMon.app
 The command It verifies the new bundle before asking a running copy to
 quit. Builds with the save-on-quit prompt let you save or discard pending edits,
 or cancel the update. If the app was open, the command reopens it from the same
-location. If startup fails, it tries to restore and reopen the previous copy.
-If recovery needs your help, the error prints the location of the previous copy.
-If the app was closed, it stays closed.
+location. If startup fails, it tries to restore the previous copy and reports its location
+if recovery needs your help. The updater also opens SysMon after replacing a copy
+that was closed, so the updated indicators become visible immediately.
 
 The command waits for your answer to the quit dialog without a time limit.
 Choosing Cancel leaves the running app and installed bundle in place.

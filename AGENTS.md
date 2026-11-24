@@ -16,7 +16,7 @@ Use **SysMon — Your Mac, at a glance.** for the product name and tagline. Keep
 
 - `bash scripts/build-app.sh`: compile an optimized arm64 executable, package `dist/SysMon.app`, and apply a free local ad-hoc signature.
 - `open dist/SysMon.app`: launch the menu bar app. Quit an existing copy before relaunching a rebuild.
-- `bash scripts/update-app.sh`: update an existing `/Applications/SysMon.app`; use `--app dist/SysMon.app` for a development copy. A running app is asked to quit and then reopened; a closed app stays closed.
+- `bash scripts/update-app.sh`: update an existing `/Applications/SysMon.app`; use `--app dist/SysMon.app` for a development copy. A running app is asked to quit and then reopened; a closed app is opened after replacement.
 - `bash scripts/uninstall.sh --app /Applications/SysMon.app --purge`: move that copy to Trash and delete preferences after a successful move. Omit `--purge` to keep preferences; use `--dry-run` to preview.
 - `bash scripts/build-icon.sh`: regenerate icon sizes and `.icns`; requires macOS image tools and Swift for its fallback.
 - `bash scripts/test.sh`: run all Swift checks; requires a graphical macOS session and includes a 65-second delayed-quit responsiveness check.

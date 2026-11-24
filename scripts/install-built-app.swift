@@ -55,6 +55,22 @@ struct BundleInstaller {
         }
         guard let oldApp = running.first else {
             try replace(source, at: destination, expected: previous)
+            guard updating else { return }
+            print("Launching updated SysMon…")
+            do {
+                _ = try await launch(destination)
+            } catch {
+                let launchFailure = error.localizedDescription
+                do {
+                    guard try validate(source) == previous else {
+                        throw InstallError(message: "The previous bundle changed during the update.")
+                    }
+                    try replace(source, at: destination, expected: candidate)
+                } catch {
+                    throw InstallError(message: "Could not launch the updated app: \(launchFailure). Recovery could not finish: \(error.localizedDescription). Previous copy: \(source.path)")
+                }
+                throw InstallError(message: "Could not launch the updated app: \(launchFailure). The previous version was restored.")
+            }
             return
         }
 
