@@ -4,53 +4,16 @@ import AppKit
 #error("mac-sysmonitor supports Apple Silicon (arm64) only.")
 #endif
 
-enum Metric: String, CaseIterable {
-    case cpu = "CPU"
-    case gpu = "GPU"
-    case memory = "RAM"
-    case swap = "Swap"
-    case network = "Network speed"
-    case disk = "Disk I/O"
-
-    var preferenceKey: String { "metric.\(rawValue).enabled" }
-    var displayModeKey: String { "metric.\(rawValue).displayMode" }
-
-    var shortName: String {
-        switch self {
-        case .memory: "RAM"
-        case .network: "NET"
-        case .disk: "DISK"
-        default: rawValue
-        }
-    }
-}
-
-enum DisplayMode: String, CaseIterable {
-    case text = "Text"
-    case graph = "Mini graph"
-    case combined = "Text + mini graph"
-}
-
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let settings = SettingsStore()
     private var statusItem: NSStatusItem?
     private var metricItems: [Metric: NSStatusItem] = [:]
+    private var metricMenuItems: [Metric: NSMenuItem] = [:]
+    private let intervalMenu = NSMenu()
     private var settingsController: SettingsWindowController?
-    private let refreshIntervalKey = "refreshIntervalSeconds"
-    private let refreshIntervals = [1, 2, 3, 5, 10, 30]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        UserDefaults.standard.register(defaults: Dictionary(
-            uniqueKeysWithValues: Metric.allCases.map { ($0.preferenceKey, true) }
-        ))
-        UserDefaults.standard.register(defaults: [refreshIntervalKey: 3])
-        for metric in Metric.allCases {
-            UserDefaults.standard.register(defaults: [metric.displayModeKey: DisplayMode.text.rawValue])
-        }
-        if !refreshIntervals.contains(UserDefaults.standard.integer(forKey: refreshIntervalKey)) {
-            UserDefaults.standard.set(3, forKey: refreshIntervalKey)
-        }
-
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.title = "SM"
         item.button?.toolTip = "mac-sysmonitor"
@@ -60,7 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         item.menu = makeMenu()
         statusItem = item
-        updateIndicators()
+        for metric in Metric.allCases {
+            updateIndicator(for: metric)
+        }
         showSettings()
     }
 
@@ -71,8 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showSettings() {
         if settingsController == nil {
-            settingsController = SettingsWindowController(intervalKey: refreshIntervalKey, intervals: refreshIntervals) { [weak self] in
-                self?.refreshSettings()
+            settingsController = SettingsWindowController(settings: settings) { [weak self] changes in
+                self?.applySettings(changes)
             }
         }
         settingsController?.refresh()
@@ -81,9 +46,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsController?.window?.makeKeyAndOrderFront(nil)
     }
 
-    private func refreshSettings() {
-        updateIndicators()
-        statusItem?.menu = makeMenu()
+    private func applySettings(_ changes: SettingsChanges) {
+        let applied = settings.apply(changes)
+        for metric in Metric.allCases where applied.visibility[metric] != nil || applied.modes[metric] != nil {
+            metricMenuItems[metric]?.submenu = makeMetricMenu(metric)
+            updateIndicator(for: metric)
+        }
+        if let seconds = applied.interval {
+            for option in intervalMenu.items {
+                option.state = option.tag == seconds ? .on : .off
+            }
+        }
         settingsController?.refresh()
     }
 
@@ -107,15 +80,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         for metric in Metric.allCases {
-            let settings = NSMenuItem(title: metric.rawValue, action: nil, keyEquivalent: "")
-            settings.submenu = makeMetricMenu(metric)
-            menu.addItem(settings)
+            let item = NSMenuItem(title: metric.title, action: nil, keyEquivalent: "")
+            item.submenu = makeMetricMenu(metric)
+            menu.addItem(item)
+            metricMenuItems[metric] = item
         }
 
         menu.addItem(.separator())
         let intervalItem = NSMenuItem(title: "Refresh interval", action: nil, keyEquivalent: "")
-        let intervalMenu = NSMenu()
-        for seconds in refreshIntervals {
+        let selectedInterval = settings.interval
+        for seconds in SettingsStore.intervals {
             let option = NSMenuItem(
                 title: "\(seconds) \(seconds == 1 ? "second" : "seconds")",
                 action: #selector(changeRefreshInterval(_:)),
@@ -123,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             option.target = self
             option.tag = seconds
-            option.state = UserDefaults.standard.integer(forKey: refreshIntervalKey) == seconds ? .on : .off
+            option.state = selectedInterval == seconds ? .on : .off
             intervalMenu.addItem(option)
         }
         intervalItem.submenu = intervalMenu
@@ -137,36 +111,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleMetric(_ sender: NSMenuItem) {
-        guard let rawValue = sender.representedObject as? String,
-              let metric = Metric(rawValue: rawValue) else { return }
-        let enabled = !UserDefaults.standard.bool(forKey: metric.preferenceKey)
-        UserDefaults.standard.set(enabled, forKey: metric.preferenceKey)
-        sender.state = enabled ? .on : .off
-        refreshSettings()
-    }
-
-    private func displayMode(for metric: Metric) -> DisplayMode {
-        DisplayMode(rawValue: UserDefaults.standard.string(forKey: metric.displayModeKey) ?? "") ?? .text
+        guard let metric = sender.representedObject as? Metric else { return }
+        applySettings(SettingsChanges(visibility: [metric: !settings.isEnabled(metric)]))
     }
 
     private func makeMetricMenu(_ metric: Metric) -> NSMenu {
-        let menu = NSMenu(title: metric.rawValue)
-        menu.addItem(NSMenuItem(title: metric.rawValue, action: nil, keyEquivalent: ""))
+        let menu = NSMenu(title: metric.title)
+        menu.addItem(NSMenuItem(title: metric.title, action: nil, keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "No data · collector not implemented yet", action: nil, keyEquivalent: ""))
         menu.addItem(.separator())
 
         let toggle = NSMenuItem(title: "Show in menu bar", action: #selector(toggleMetric(_:)), keyEquivalent: "")
         toggle.target = self
-        toggle.representedObject = metric.rawValue
-        toggle.state = UserDefaults.standard.bool(forKey: metric.preferenceKey) ? .on : .off
+        toggle.representedObject = metric
+        toggle.state = settings.isEnabled(metric) ? .on : .off
         menu.addItem(toggle)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Display", action: nil, keyEquivalent: ""))
+        let selectedMode = settings.displayMode(for: metric)
         for mode in DisplayMode.allCases {
-            let option = NSMenuItem(title: mode.rawValue, action: #selector(changeDisplayMode(_:)), keyEquivalent: "")
+            let option = NSMenuItem(title: mode.title, action: #selector(changeDisplayMode(_:)), keyEquivalent: "")
             option.target = self
-            option.representedObject = [metric.rawValue, mode.rawValue]
-            option.state = displayMode(for: metric) == mode ? .on : .off
+            option.representedObject = (metric, mode)
+            option.state = selectedMode == mode ? .on : .off
             menu.addItem(option)
         }
         menu.addItem(.separator())
@@ -189,43 +156,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func changeDisplayMode(_ sender: NSMenuItem) {
-        guard let selection = sender.representedObject as? [String], selection.count == 2,
-              let metric = Metric(rawValue: selection[0]),
-              let mode = DisplayMode(rawValue: selection[1]) else { return }
-        UserDefaults.standard.set(mode.rawValue, forKey: metric.displayModeKey)
-        for option in sender.menu?.items ?? [] {
-            if let value = option.representedObject as? [String], value.count == 2 {
-                option.state = value[1] == mode.rawValue ? .on : .off
-            }
-        }
-        refreshSettings()
+        guard let (metric, mode) = sender.representedObject as? (Metric, DisplayMode) else { return }
+        applySettings(SettingsChanges(modes: [metric: mode]))
     }
 
-    private func updateIndicators() {
-        for metric in Metric.allCases {
-            guard UserDefaults.standard.bool(forKey: metric.preferenceKey) else {
-                if let item = metricItems.removeValue(forKey: metric) {
-                    NSStatusBar.system.removeStatusItem(item)
-                }
-                continue
+    private func updateIndicator(for metric: Metric) {
+        guard settings.isEnabled(metric) else {
+            if let item = metricItems.removeValue(forKey: metric) {
+                NSStatusBar.system.removeStatusItem(item)
             }
-            let item: NSStatusItem
-            if let existing = metricItems[metric] {
-                item = existing
-            } else {
-                item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-                metricItems[metric] = item
-            }
-            let mode = displayMode(for: metric)
+            return
+        }
+        let item: NSStatusItem
+        if let existing = metricItems[metric] {
+            item = existing
+        } else {
+            item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+            metricItems[metric] = item
             item.button?.title = ""
             item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            item.button?.image = StatusGraphic.image(metric: metric, mode: mode)
             item.button?.appearance = nil
             item.button?.contentTintColor = nil
-            item.button?.toolTip = "\(metric.rawValue) · \(mode.rawValue) · No data"
-            item.button?.setAccessibilityLabel("\(metric.rawValue), no data, \(mode.rawValue)")
-            item.menu = makeMetricMenu(metric)
         }
+        let mode = settings.displayMode(for: metric)
+        item.button?.image = StatusGraphic.image(metric: metric, mode: mode)
+        item.button?.toolTip = "\(metric.title) · \(mode.title) · No data"
+        item.button?.setAccessibilityLabel("\(metric.title), no data, \(mode.title)")
+        item.menu = makeMetricMenu(metric)
     }
 
     @objc private func quitApp() {
@@ -233,12 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func changeRefreshInterval(_ sender: NSMenuItem) {
-        guard refreshIntervals.contains(sender.tag) else { return }
-        UserDefaults.standard.set(sender.tag, forKey: refreshIntervalKey)
-        for option in sender.menu?.items ?? [] {
-            option.state = option.tag == sender.tag ? .on : .off
-        }
-        refreshSettings()
+        applySettings(SettingsChanges(interval: sender.tag))
     }
 }
 

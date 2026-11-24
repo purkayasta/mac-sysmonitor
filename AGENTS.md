@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+[README](README.md) · [Installation](INSTALL.md) · [Contributor guide](CONTRIBUTING.md) · [Report a bug](CONTRIBUTING.md#report-a-bug) · [Contact](CONTACT.md)
+
 ## Project Structure & Module Organization
 
 `mac-sysmonitor` is a dependency-free Swift/AppKit menu bar app for Apple Silicon, targeting macOS 13+. `Sources/MacSysMonitor/main.swift` owns app lifecycle, menus, and saved preferences; `StatusGraphic.swift` renders compact indicators. `Package.swift` defines the executable package. `Resources/` contains bundle metadata, the master icon, its generation prompt, and the packaged `.icns`. Build scripts live in `scripts/`; generated binaries, caches, and app bundles belong in ignored `.build/` and `dist/` directories. No test target exists yet.

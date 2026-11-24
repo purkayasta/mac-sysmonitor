@@ -41,7 +41,7 @@ enum StatusGraphic {
         }
         image.unlockFocus()
         image.isTemplate = true
-        image.accessibilityDescription = "\(metric.rawValue), no data"
+        image.accessibilityDescription = "\(metric.title), no data"
         return image
     }
 }

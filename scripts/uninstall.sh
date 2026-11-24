@@ -11,9 +11,9 @@ usage() {
     cat <<'HELP'
 Usage: bash scripts/uninstall.sh [--app PATH] [--purge] [--dry-run]
 
-Remove dist/mac-sysmonitor.app by default.
-  --app PATH   Remove a specific copy, e.g. /Applications/mac-sysmonitor.app.
-  --purge      Also delete this user's saved mac-sysmonitor preferences.
+Move dist/mac-sysmonitor.app to Trash by default.
+  --app PATH   Move a specific copy to Trash, e.g. /Applications/mac-sysmonitor.app.
+  --purge      Delete this user's saved preferences after a successful move.
   --dry-run    Show the actions without changing anything.
   --help       Show this help.
 
@@ -48,28 +48,30 @@ if [ -e "$APP_PATH" ]; then
     PLIST="$APP_PATH/Contents/Info.plist"
     ACTUAL_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST" 2>/dev/null)" || fail 'Cannot read the app bundle identifier.'
     [ "$ACTUAL_ID" = "$BUNDLE_ID" ] || fail "Refusing to remove a different app: $ACTUAL_ID"
-    if ! "$DRY_RUN" && /usr/bin/pgrep -x mac-sysmonitor >/dev/null; then
+    if ! "$DRY_RUN" && pgrep -x mac-sysmonitor >/dev/null; then
         fail 'Quit mac-sysmonitor using SM → Quit mac-sysmonitor, then retry.'
     fi
     if "$DRY_RUN"; then
-        printf 'Would remove: %s\n' "$APP_PATH"
+        printf 'Would move to Trash: %s\n' "$APP_PATH"
     else
-        rm -rf -- "$APP_PATH"
-        printf 'Removed: %s\n' "$APP_PATH"
+        swift "$PROJECT_DIR/scripts/move-to-trash.swift" "$APP_PATH" ||
+            fail 'Could not move the app to Trash. Saved settings were kept.'
+        printf 'Moved to Trash: %s\n' "$APP_PATH"
     fi
 else
     printf 'App already absent: %s\n' "$APP_PATH"
+    exit 0
 fi
 
 if "$PURGE"; then
     if "$DRY_RUN"; then
         printf 'Would delete preferences: %s (current user)\n' "$BUNDLE_ID"
     else
-        if /usr/bin/pgrep -x mac-sysmonitor >/dev/null; then
+        if pgrep -x mac-sysmonitor >/dev/null; then
             fail 'Quit mac-sysmonitor before deleting preferences.'
         fi
-        if /usr/bin/defaults read "$BUNDLE_ID" >/dev/null 2>&1; then
-            /usr/bin/defaults delete "$BUNDLE_ID"
+        if defaults read "$BUNDLE_ID" >/dev/null 2>&1; then
+            defaults delete "$BUNDLE_ID"
             printf 'Deleted preferences: %s\n' "$BUNDLE_ID"
         else
             printf 'No saved preferences found: %s\n' "$BUNDLE_ID"
