@@ -1,4 +1,4 @@
-# Install mac-sysmonitor
+# Install SysMon
 
 [README](README.md) · [App settings](README.md#-make-it-yours) · [Development setup](CONTRIBUTING.md#set-up-the-development-environment) · [Report a bug](CONTRIBUTING.md#report-a-bug) · [Contact](CONTACT.md)
 
@@ -14,6 +14,10 @@ then open it once to finish setup. A compatible Command Line Tools installation
 also works with the build script. No paid Apple Developer membership is needed
 for local builds. **Python is not required.**
 
+macOS 13 is the minimum deployment version. SysMon uses native AppKit controls
+that follow your installed macOS appearance. The Xcode or Command Line Tools
+version you use must support Swift 6 and your development machine's macOS version.
+
 ### 2. Open the project folder in Terminal
 
 Download and extract the source, or use your existing checkout. In Terminal, type
@@ -26,10 +30,10 @@ Run the commands below from that folder.
 
 ```sh
 bash scripts/build-app.sh
-open dist/mac-sysmonitor.app
+open dist/SysMon.app
 ```
 
-Wait for `Built .../dist/mac-sysmonitor.app`. The settings window opens on launch,
+Wait for `Built .../dist/SysMon.app`. The settings window opens on launch,
 and **SM** and enabled metric indicators appear in the menu bar.
 
 ### 4. Keep it in Applications
@@ -38,8 +42,8 @@ and **SM** and enabled metric indicators appear in the menu bar.
 open dist
 ```
 
-Drag **mac-sysmonitor.app** into **Applications** in Finder. Quit the test copy,
-then launch the Applications copy. You can also launch it from Launchpad if listed.
+Quit the test copy using **SM → Quit SysMon**, then drag **SysMon.app** into
+**Applications** in Finder and launch that copy. You can also launch it from Launchpad if listed.
 Keep the source folder if you want to [update later](#update) or use the
 [Terminal uninstaller](#from-terminal).
 
@@ -49,37 +53,60 @@ Keep the source folder if you want to [update later](#update) or use the
 
 ## Update
 
-1. Quit through **SM → Quit mac-sysmonitor**.
-2. Get the latest source and run `bash scripts/build-app.sh`.
-3. Run `open dist`, then drag the rebuilt app into Applications and choose **Replace**.
-4. Launch the Applications copy. Your settings are kept.
+Get the latest source, then run this command from the project folder.
+
+```sh
+bash scripts/update-app.sh
+```
+
+This updates `/Applications/SysMon.app` and keeps saved settings. For
+a copy in another location, pass its path with `--app`.
+
+The destination must already exist and be named `SysMon.app`. For a fresh
+installation, follow [Build and try it](#3-build-and-try-it) instead.
+
+```sh
+bash scripts/update-app.sh --app dist/SysMon.app
+```
+
+The command builds and verifies the new bundle before asking a running copy to
+quit. Builds with the save-on-quit prompt let you save or discard pending edits,
+or cancel the update. If the app was open, the command reopens it from the same
+location. If startup fails, it tries to restore and reopen the previous copy.
+If recovery needs your help, the error prints the location of the previous copy.
+If the app was closed, it stays closed.
+
+The command waits for your answer to the quit dialog without a time limit.
+Choosing Cancel leaves the running app and installed bundle in place.
+Keep any staging folder whose error message identifies it as the previous-copy
+recovery location until you have restored or verified the app.
 
 ## Uninstall
 
 ### From the app — easiest
 
 1. Click or right-click **SM** or any metric.
-2. Choose **Uninstall mac-sysmonitor…**, also available in the settings window.
+2. Choose **Uninstall SysMon…**, also available in the settings window.
 3. Optionally check **Also remove saved settings**.
 4. Choose **Move to Trash**, or **Cancel** to keep the app.
 
-The running app copy moves to Trash, then quits. Other copies, source files, and
-build caches stay in place. Settings are kept unless you select their removal.
-If removal fails, the app stays open and settings are preserved. Quit any other
-running copies before uninstalling.
+The app quits before its helper moves that copy to Trash. Other copies, source
+files, and build caches stay in place. Settings are kept unless you select their
+removal. If the move fails, the helper shows an error and keeps your settings.
+Quit any other running copies before uninstalling.
 
 ### From Terminal
 
 Quit the app first. To move the Applications copy to Trash:
 
 ```sh
-bash scripts/uninstall.sh --app /Applications/mac-sysmonitor.app
+bash scripts/uninstall.sh --app /Applications/SysMon.app
 ```
 
 Add `--purge` to remove saved settings after the app moves to Trash:
 
 ```sh
-bash scripts/uninstall.sh --app /Applications/mac-sysmonitor.app --purge
+bash scripts/uninstall.sh --app /Applications/SysMon.app --purge
 ```
 
 For the copy built inside this project, omit `--app`:
@@ -89,13 +116,18 @@ bash scripts/uninstall.sh          # Keep settings
 bash scripts/uninstall.sh --purge  # Also remove settings
 ```
 
-Add **`--dry-run`** to preview changes. Use `--app "/full/path/mac-sysmonitor.app"`
+Add **`--dry-run`** to preview changes. Use `--app "/full/path/SysMon.app"`
 for another location. Each run moves only that copy. The command uses the Swift
 toolchain from the build instructions. You can also move the app to Trash in Finder.
 
+The app path must be an actual `SysMon.app` directory; symlinks and unrelated
+bundles are rejected. If that copy is already absent, the command exits without
+deleting preferences, including when `--purge` is supplied. Use the preferences
+command below to clear settings after manually removing the app.
+
 ### From Finder
 
-Quit the app, then move **mac-sysmonitor.app** from Applications to Trash. Remove
+Quit the app, then move **SysMon.app** from Applications to Trash. Remove
 any extra copy in `dist/` too. After quitting, you can clear saved preferences with
 this command.
 
@@ -103,8 +135,18 @@ this command.
 defaults delete dev.local.mac-sysmonitor
 ```
 
+`dev.local.mac-sysmonitor` is SysMon's stable bundle identifier and preferences
+domain. It is independent of the visible app name.
+
 A “domain not found” message means there were no saved settings to remove. You can
 delete the source project folder afterward if you no longer need it.
+
+### Clean generated files
+
+After quitting SysMon, you can delete `dist/` in Finder to remove generated app
+bundles. This leaves source files, `.build/` caches, and saved preferences in place.
+The next `bash scripts/build-app.sh` recreates `dist/SysMon.app`. Moving an app to
+Trash is reversible until you empty Trash or permanently delete that item.
 
 ## Troubleshooting
 
@@ -113,5 +155,7 @@ delete the source project folder afterward if you no longer need it.
 - **A downloaded build is blocked.** Use the source build instructions above.
   Signed downloadable releases are planned.
 - **An old version keeps appearing.** Quit all copies before replacing the app.
+- **The update waits for quit.** Answer the app's Save/Cancel/Discard dialog.
+  The updater keeps waiting while that decision is pending.
 - **The app crashes.** [Find and read the crash report](CONTRIBUTING.md#find-and-read-a-crash-report),
   then [attach it to a GitHub issue](CONTRIBUTING.md#attach-the-report-to-the-issue).

@@ -1,33 +1,50 @@
-# Repository Guidelines
+# SysMon Repository Guidelines
 
 [README](README.md) · [Installation](INSTALL.md) · [Contributor guide](CONTRIBUTING.md) · [Report a bug](CONTRIBUTING.md#report-a-bug) · [Contact](CONTACT.md)
 
 ## Project Structure & Module Organization
 
-`mac-sysmonitor` is a dependency-free Swift/AppKit menu bar app for Apple Silicon, targeting macOS 13+. `Sources/MacSysMonitor/main.swift` owns app lifecycle, menus, and saved preferences; `StatusGraphic.swift` renders compact indicators. `Package.swift` defines the executable package. `Resources/` contains bundle metadata, the master icon, its generation prompt, and the packaged `.icns`. Build scripts live in `scripts/`; generated binaries, caches, and app bundles belong in ignored `.build/` and `dist/` directories. No test target exists yet.
+`SysMon` is a dependency-free Swift/AppKit menu bar app for Apple Silicon, targeting macOS 13+. `Sources/SysMon/main.swift` owns app lifecycle, menus, and saved preferences; `StatusGraphic.swift` renders compact indicators. `Package.swift` defines the executable package. `Resources/` contains bundle metadata, the master icon, its generation prompt, and the packaged `.icns`. Build scripts live in `scripts/`; generated binaries, caches, and app bundles belong in ignored `.build/` and `dist/` directories. Swift fixture, integration, and AppKit lifecycle checks live in `Tests/`; no SwiftPM test target exists yet.
+
+Use **SysMon — Your Mac, at a glance.** for the product name and tagline. Keep **Made with Codex.** in the README. The executable, package target, and app bundle are `SysMon`, `SysMon`, and `SysMon.app`. Keep the stable bundle identifier `dev.local.mac-sysmonitor` and persisted preference keys unless a migration is explicitly requested. The existing GitHub repository slug is `mac-sysmonitor`; app-name compatibility fallbacks have been removed.
+
+`SettingsStore.swift` manages preferences; `SettingsWindowController.swift` manages pending edits and Save/Cancel/Discard confirmation. `AppUninstaller.swift` hands removal to a helper after quit; `AppRemoval.swift` validates bundle identity before removal. `scripts/install-built-app.swift` installs signed bundles and handles update recovery; `scripts/QuitRequest.swift` waits for a quit-event reply off the UI thread.
 
 ## Build, Test, and Development Commands
 
-- `bash scripts/build-app.sh`: compile an optimized arm64 executable, package `dist/mac-sysmonitor.app`, and apply a free local ad-hoc signature.
-- `open dist/mac-sysmonitor.app`: launch the menu bar app. Quit an existing copy before relaunching a rebuild.
-- `bash scripts/build-icon.sh`: regenerate icon sizes and `.icns`; requires macOS image tools and Python 3 for its fallback.
-- `codesign --verify --strict dist/mac-sysmonitor.app`: verify the built bundle’s signature.
+- `bash scripts/build-app.sh`: compile an optimized arm64 executable, package `dist/SysMon.app`, and apply a free local ad-hoc signature.
+- `open dist/SysMon.app`: launch the menu bar app. Quit an existing copy before relaunching a rebuild.
+- `bash scripts/update-app.sh`: update an existing `/Applications/SysMon.app`; use `--app dist/SysMon.app` for a development copy. A running app is asked to quit and then reopened; a closed app stays closed.
+- `bash scripts/uninstall.sh --app /Applications/SysMon.app --purge`: move that copy to Trash and delete preferences after a successful move. Omit `--purge` to keep preferences; use `--dry-run` to preview.
+- `bash scripts/build-icon.sh`: regenerate icon sizes and `.icns`; requires macOS image tools and Swift for its fallback.
+- `bash scripts/test.sh`: run all Swift checks; requires a graphical macOS session and includes a 65-second delayed-quit responsiveness check.
+- `codesign --verify --strict dist/SysMon.app`: verify the built bundle’s signature.
 - `plutil -lint Resources/Info.plist`: validate bundle metadata.
 
 Use the direct compiler build script as the baseline workflow. The initial machine has inconsistent Swift Package Manager interfaces/libraries; use a matching full Xcode installation for package-based development.
+
+macOS 13 is the minimum deployment version, not a visual theme. Native AppKit controls follow the installed macOS appearance. Keep the deployment version consistent across `Package.swift`, `scripts/build-app.sh`, and `Resources/Info.plist`.
 
 ## Coding Style & Naming Conventions
 
 Use four-space indentation, `UpperCamelCase` type names, and `lowerCamelCase` members. Keep AppKit operations on `@MainActor`; move future sampling work off the UI thread. Preserve existing preference keys or provide a migration. No formatter or linter is configured.
 
+Use native AppKit controls, dialogs, semantic colors, and system fonts. Preserve template status images and accessibility labels. Closing Settings or quitting with pending edits must offer Save, Cancel, and Discard. Keep blocking IPC, process waits, and future collection work off the UI thread. The updater must wait for the user's quit decision without expiring while a confirmation dialog is open; keep Apple Event waits off Swift's cooperative executor pool as well.
+
 ## Testing Guidelines
 
-There is no automated framework or coverage threshold configured. For UI changes, build and manually verify all six metrics across all three display modes, toggle recovery through SM, preference persistence after relaunch, and light/dark appearance. Network download stays above upload. For future collector logic, add focused tests under `Tests/MacSysMonitorTests/` and register a package test target before using `swift test`.
+Run `bash scripts/test.sh` for the standalone Swift checks; there is no coverage threshold configured. For UI changes, build and manually verify all six metrics across all three display modes, toggle recovery through SM, preference persistence after relaunch, and light/dark appearance. Network download stays above upload. For future collector logic, add focused tests under `Tests/SysMonTests/` and register a package test target before using `swift test`.
+
+All test code must be Swift. The suite runs six removal safety checks, 20 script integration cases, settings close/quit decisions, native modal event handling, light/dark control bounds and alignment, and delayed-quit responsiveness. The delayed cancellation takes 65 seconds; allow more than one minute for the suite. Tests use isolated preferences, temporary bundles, and mocked destructive/publishing commands. Keep tests independent of installed copies and real GitHub access. Preview images and lifecycle logs belong in `.build/`.
+
+For UI or IPC changes, verify event-loop responsiveness and delayed cancellation, rather than claiming universal freedom from freezes. Tests must report completion explicitly so early native-process termination cannot silently skip checks.
 
 ## Commit & Pull Request Guidelines
 
-No Git history is available to establish existing conventions. Use concise imperative subjects, such as `Add network sampling`. PRs should describe behavior, validation, limitations, and related issues. Include screenshots for visual changes. Exclude generated build outputs.
+Use concise imperative subjects, such as `Add network sampling`. PRs should describe behavior, validation, limitations, and related issues. Include screenshots for visual changes. Exclude generated build outputs. When publishing is requested, commit the intended changes before running `bash scripts/publish-private.sh`; it pushes committed `main` to the verified private repository and excludes uncommitted files.
 
 ## Performance & Security
 
 Keep the default refresh interval at three seconds. Collectors are not implemented yet; never present synthetic readings as real data. Bound future history buffers and stop disabled collectors. Never commit signing keys or credentials; local ad-hoc signing is not public-release notarization.
+
+Update, install, and uninstall accept bundles named `SysMon.app` only and must validate their identity before replacement or removal. Preserve recovery files marked `.keep-for-recovery` when an update cannot finish. Keep generated outputs out of commits; if the user requests a clean `dist/`, verify builds in a temporary checkout and remove that temporary output afterward.

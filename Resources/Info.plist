@@ -5,13 +5,13 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>mac-sysmonitor</string>
+    <string>SysMon</string>
     <key>CFBundleIdentifier</key>
     <string>dev.local.mac-sysmonitor</string>
     <key>CFBundleName</key>
-    <string>mac-sysmonitor</string>
+    <string>SysMon</string>
     <key>CFBundleDisplayName</key>
-    <string>mac-sysmonitor</string>
+    <string>SysMon</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>

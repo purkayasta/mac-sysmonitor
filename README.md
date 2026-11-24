@@ -1,6 +1,8 @@
-![mac-sysmonitor app icon](Resources/readme-icon.png)
+![SysMon app icon](Resources/readme-icon.png)
 
-# mac-sysmonitor
+# SysMon — Your Mac, at a glance.
+
+Made with Codex.
 
 A small, native home for your Mac’s system stats. Right in the menu bar.
 
@@ -46,9 +48,10 @@ also click or right-click **SM** or any metric and choose **Settings…**.
 | SM menu | Restore hidden metrics, open settings, quit, or uninstall |
 
 Click **Save** in the settings window to apply your changes together. Closing
-the window discards unsaved edits and keeps the app running. Changes made
+the window with unsaved edits offers **Save and Close**, **Cancel**, or
+**Close Without Saving**; the app keeps running. Changes made
 directly in the menu bar apply immediately. To stop the app, choose
-**SM → Quit mac-sysmonitor**. The refresh interval will control sampling once
+**SM → Quit SysMon**. The refresh interval will control sampling once
 collectors are implemented.
 
 **Network layout:** download is on top, upload below. The current indicators use
@@ -61,6 +64,23 @@ and highlight treatment for its transparent, tinted, or opaque menu bar. The app
 uses native light/dark appearance, system accent colors, semantic labels, and a
 window material that supports desktop tinting. AppKit handles accessibility
 contrast and transparency behavior; no custom theme needs configuring.
+
+**macOS 13+ is the minimum supported version.** Native controls follow the
+appearance of the macOS version you run.
+
+### Build and verify
+
+From the repository root:
+
+```sh
+bash scripts/build-app.sh
+open dist/SysMon.app
+```
+
+Run `bash scripts/test.sh` for the Swift safety, integration, and native UI
+checks. Allow more than one minute for its delayed-quit responsiveness test.
+See the [contributor guide](CONTRIBUTING.md#build-and-test) for requirements,
+coverage, and preview images.
 
 ## 🔎 Troubleshooting
 

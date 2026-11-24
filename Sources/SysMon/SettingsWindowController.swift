@@ -4,20 +4,25 @@ import AppKit
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let settings: SettingsStore
     private let onSave: (SettingsChanges) -> Void
+    private let onUninstall: () -> Void
+    private let presentAlert: (NSAlert) -> NSApplication.ModalResponse
     private var toggles: [Metric: NSButton] = [:]
     private var modes: [Metric: NSPopUpButton] = [:]
     private let intervalControl = NSPopUpButton(frame: .zero, pullsDown: false)
     private let saveButton = NSButton(title: "Save", target: nil, action: nil)
     private var pending = SettingsChanges()
 
-    init(settings: SettingsStore, onSave: @escaping (SettingsChanges) -> Void) {
+    init(settings: SettingsStore, onSave: @escaping (SettingsChanges) -> Void, onUninstall: @escaping () -> Void,
+         presentAlert: @escaping (NSAlert) -> NSApplication.ModalResponse = { $0.runModal() }) {
         self.settings = settings
         self.onSave = onSave
+        self.onUninstall = onUninstall
+        self.presentAlert = presentAlert
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 590, height: 560),
+            contentRect: NSRect(x: 0, y: 0, width: 590, height: 420),
             styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false
         )
-        window.title = "mac-sysmonitor"
+        window.title = "SysMon"
         // Inherit light/dark appearance and the system's control accent color.
         window.appearance = nil
         window.backgroundColor = .windowBackgroundColor
@@ -52,10 +57,43 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         refresh()
     }
 
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        confirmPendingChanges(quitting: false)
+    }
+
+    func confirmQuit() -> Bool {
+        confirmPendingChanges(quitting: true)
+    }
+
+    private func confirmPendingChanges(quitting: Bool) -> Bool {
+        guard !pending.isEmpty else { return true }
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = quitting ? "Save settings before quitting?" : "Save settings before closing?"
+        alert.addButton(withTitle: quitting ? "Save and Quit" : "Save and Close")
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: quitting ? "Quit Without Saving" : "Close Without Saving")
+        switch presentAlert(alert) {
+        case .alertFirstButtonReturn:
+            saveSettings()
+            return true
+        case .alertThirdButtonReturn:
+            return true
+        default:
+            return false
+        }
+    }
+
     private func settingsPage() -> NSView {
-        let header = NSTextField(labelWithString: "Menu bar settings")
+        let header = NSTextField(labelWithString: "SysMon")
         header.textColor = .labelColor
         header.font = .systemFont(ofSize: 20, weight: .semibold)
+        let tagline = NSTextField(labelWithString: "Your Mac, at a glance.")
+        tagline.textColor = .secondaryLabelColor
+        let identity = NSStackView(views: [header, tagline])
+        identity.orientation = .horizontal
+        identity.alignment = .firstBaseline
+        identity.spacing = 10
         var rows: [[NSView]] = []
         for metric in Metric.allCases {
             let label = NSTextField(labelWithString: metric.title)
@@ -78,7 +116,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let grid = NSGridView(views: rows)
         grid.columnSpacing = 16
         grid.rowSpacing = 12
+        grid.xPlacement = .leading
+        grid.yPlacement = .center
         grid.rowAlignment = .firstBaseline
+        // Use native fitting widths so the grid cannot redistribute spare
+        // space differently when AppKit resolves light/dark appearance.
+        for column in 0..<3 {
+            grid.column(at: column).width = rows.map { $0[column].fittingSize.width }.max() ?? 0
+        }
 
         for seconds in SettingsStore.intervals {
             intervalControl.addItem(withTitle: "\(seconds) \(seconds == 1 ? "second" : "seconds")")
@@ -88,11 +133,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         intervalControl.action = #selector(changeInterval)
         intervalControl.setAccessibilityLabel("Refresh interval")
         let intervalRow = NSStackView(views: [NSTextField(labelWithString: "Refresh interval"), intervalControl])
+        intervalRow.orientation = .horizontal
+        intervalRow.alignment = .firstBaseline
+        intervalRow.distribution = .fill
         intervalRow.spacing = 16
         let note = NSTextField(wrappingLabelWithString: "Live metric collection is coming next. Indicators currently show no data. Download appears above upload.")
         note.font = .systemFont(ofSize: 12)
         note.textColor = .secondaryLabelColor
-        let uninstall = NSButton(title: "Uninstall mac-sysmonitor…", target: self, action: #selector(uninstallApp))
+        let uninstall = NSButton(title: "Uninstall SysMon…", target: self, action: #selector(uninstallApp))
         saveButton.target = self
         saveButton.action = #selector(saveSettings)
         saveButton.keyEquivalent = "\r"
@@ -100,7 +148,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         actions.orientation = .horizontal
         actions.addView(uninstall, in: .leading)
         actions.addView(saveButton, in: .trailing)
-        return page(views: [header, grid, intervalRow, note], actions: actions)
+        return page(views: [identity, grid, intervalRow, note], actions: actions)
     }
 
     private func page(views: [NSView], actions: NSStackView) -> NSView {
@@ -160,5 +208,5 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         onSave(changes)
     }
 
-    @objc private func uninstallApp() { AppUninstaller.confirmAndUninstall() }
+    @objc private func uninstallApp() { onUninstall() }
 }

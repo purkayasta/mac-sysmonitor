@@ -1,7 +1,8 @@
 import AppKit
+import Darwin
 
 #if !arch(arm64)
-#error("mac-sysmonitor supports Apple Silicon (arm64) only.")
+#error("SysMon supports Apple Silicon (arm64) only.")
 #endif
 
 @MainActor
@@ -12,11 +13,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var metricMenuItems: [Metric: NSMenuItem] = [:]
     private let intervalMenu = NSMenu()
     private var settingsController: SettingsWindowController?
+    private var uninstallChannel: FileHandle?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.title = "SM"
-        item.button?.toolTip = "mac-sysmonitor"
+        item.button?.toolTip = "SysMon — Your Mac, at a glance."
         // Let the status bar choose its own contrast/highlight colors and backing.
         item.button?.appearance = nil
         item.button?.contentTintColor = nil
@@ -27,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             updateIndicator(for: metric)
         }
         showSettings()
+        DispatchQueue.main.async { [weak self] in self?.reportUpdateReady() }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -34,10 +37,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if uninstallChannel != nil { return .terminateNow }
+        return settingsController?.confirmQuit() == false ? .terminateCancel : .terminateNow
+    }
+
+    private func reportUpdateReady() {
+        guard let path = ProcessInfo.processInfo.environment["SYSMON_UPDATE_READY_PATH"] else { return }
+        let url = URL(fileURLWithPath: path)
+        let directory = url.deletingLastPathComponent()
+        guard url.lastPathComponent == ".update-ready",
+              directory.lastPathComponent.hasPrefix(".SysMon."),
+              FileManager.default.fileExists(atPath: directory.appendingPathComponent(".keep-for-recovery").path) else { return }
+        let descriptor = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else { return }
+        let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        try? file.write(contentsOf: Data(String(ProcessInfo.processInfo.processIdentifier).utf8))
+    }
+
     @objc private func showSettings() {
         if settingsController == nil {
             settingsController = SettingsWindowController(settings: settings) { [weak self] changes in
                 self?.applySettings(changes)
+            } onUninstall: { [weak self] in
+                self?.uninstall()
             }
         }
         settingsController?.refresh()
@@ -68,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
-        let heading = NSMenuItem(title: "mac-sysmonitor", action: nil, keyEquivalent: "")
+        let heading = NSMenuItem(title: "SysMon", action: nil, keyEquivalent: "")
         menu.addItem(heading)
         menu.addItem(makeSettingsItem())
         let notice = NSMenuItem(
@@ -104,7 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(intervalItem)
         menu.addItem(.separator())
         menu.addItem(makeUninstallItem())
-        let quit = NSMenuItem(title: "Quit mac-sysmonitor", action: #selector(quitApp), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit SysMon", action: #selector(quitApp), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
         return menu
@@ -143,16 +166,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func makeUninstallItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Uninstall mac-sysmonitor…", action: #selector(uninstallApp), keyEquivalent: "")
+        let item = NSMenuItem(title: "Uninstall SysMon…", action: #selector(uninstallApp), keyEquivalent: "")
         item.target = self
         return item
     }
 
     @objc private func uninstallApp() {
         // Present the confirmation after menu tracking ends.
-        DispatchQueue.main.async {
-            AppUninstaller.confirmAndUninstall()
+        DispatchQueue.main.async { [weak self] in
+            self?.uninstall()
         }
+    }
+
+    private func uninstall() {
+        guard uninstallChannel == nil, let channel = AppUninstaller.confirmAndPrepare() else { return }
+        uninstallChannel = channel
+        NSApplication.shared.terminate(nil)
     }
 
     @objc private func changeDisplayMode(_ sender: NSMenuItem) {
@@ -192,6 +221,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func changeRefreshInterval(_ sender: NSMenuItem) {
         applySettings(SettingsChanges(interval: sender.tag))
     }
+}
+
+if CommandLine.arguments.count == 2, CommandLine.arguments[1] == AppUninstaller.finishArgument {
+    exit(AppUninstaller.finishAfterQuit())
 }
 
 let app = NSApplication.shared

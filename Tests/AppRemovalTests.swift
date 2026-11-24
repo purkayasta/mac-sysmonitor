@@ -9,7 +9,7 @@ struct AppRemovalTests {
         defer { try? manager.removeItem(at: root) }
 
         func fixture(_ name: String, identifier: String = AppRemoval.bundleIdentifier) throws -> URL {
-            let app = root.appendingPathComponent(name).appendingPathComponent("mac-sysmonitor.app")
+            let app = root.appendingPathComponent(name).appendingPathComponent("SysMon.app")
             let contents = app.appendingPathComponent("Contents")
             try manager.createDirectory(at: contents, withIntermediateDirectories: true)
             let data = try PropertyListSerialization.data(
@@ -59,12 +59,28 @@ struct AppRemovalTests {
         } catch AppRemoval.RemovalError.invalidBundle { }
         try expect(!touchedInvalidApp && cleared.isEmpty, "Must reject unrelated apps before any mutation")
 
-        let link = root.appendingPathComponent("mac-sysmonitor.app")
+        let link = root.appendingPathComponent("SysMon.app")
         try manager.createSymbolicLink(at: link, withDestinationURL: failure)
         do {
             try AppRemoval.validate(link)
             throw NSError(domain: "AppRemovalTests", code: 3)
         } catch AppRemoval.RemovalError.invalidBundle { }
-        print("Passed 5 app-removal safety checks (temporary fixtures only).")
+
+        let selected = try fixture("replaced during quit")
+        let expectedIdentity = try AppRemoval.validate(selected)
+        try manager.moveItem(at: selected, to: root.appendingPathComponent("previous.app"))
+        let replacement = try fixture("replaced during quit")
+        do {
+            try AppRemoval.perform(
+                bundleURL: replacement,
+                removeSettings: true,
+                expectedIdentity: expectedIdentity,
+                trash: { _ in touchedInvalidApp = true },
+                clearSettings: { cleared.append($0) }
+            )
+            throw NSError(domain: "AppRemovalTests", code: 4)
+        } catch AppRemoval.RemovalError.changedBundle { }
+        try expect(!touchedInvalidApp && cleared.isEmpty, "A replacement bundle must be preserved")
+        print("Passed 6 app-removal safety checks (temporary fixtures only).")
     }
 }

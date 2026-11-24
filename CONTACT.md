@@ -1,9 +1,12 @@
-# Contact mac-sysmonitor
+# Contact SysMon
 
 [README](README.md) · [Installation guide](INSTALL.md) · [Contributor guide](CONTRIBUTING.md)
 
 - **Maintainer on GitHub** [@purkayasta](https://github.com/purkayasta)
 - **GitHub repository** [purkayasta/mac-sysmonitor](https://github.com/purkayasta/mac-sysmonitor)
+
+SysMon's source, issues, and contribution workflow use this existing repository
+address. The repository slug is independent of the app's visible name.
 
 For project questions, feature requests, and bugs, search the
 [existing issues](https://github.com/purkayasta/mac-sysmonitor/issues) and

@@ -2,8 +2,8 @@
 import PackageDescription
 
 let package = Package(
-    name: "mac-sysmonitor",
+    name: "SysMon",
     platforms: [.macOS(.v13)],
-    products: [.executable(name: "mac-sysmonitor", targets: ["MacSysMonitor"])],
-    targets: [.executableTarget(name: "MacSysMonitor")]
+    products: [.executable(name: "SysMon", targets: ["SysMon"])],
+    targets: [.executableTarget(name: "SysMon")]
 )
