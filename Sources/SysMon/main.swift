@@ -10,7 +10,6 @@ import ServiceManagement
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = SettingsStore()
     private var statusItem: NSStatusItem?
-    private var metricItems: [Metric: NSStatusItem] = [:]
     private var metricMenuItems: [Metric: NSMenuItem] = [:]
     private let intervalMenu = NSMenu()
     private var settingsController: SettingsWindowController?
@@ -33,20 +32,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateRecoveryItem() {
-        guard metricItems.isEmpty else {
-            if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
-            statusItem = nil
-            return
-        }
         guard statusItem == nil else { return }
-        // Keep a route back to Settings when the last metric is hidden.
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = "SM"
+        item.button?.title = ""
         item.button?.toolTip = "SysMon — Your Mac, at a glance."
-        item.button?.setAccessibilityLabel("SysMon, all metrics hidden")
         item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        item.button?.appearance = nil
+        item.button?.contentTintColor = nil
         item.menu = makeMenu()
         statusItem = item
+        refreshCombinedDisplay()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -276,43 +271,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateIndicator(for metric: Metric) {
-        guard settings.isEnabled(metric) else {
-            if let item = metricItems.removeValue(forKey: metric) {
-                NSStatusBar.system.removeStatusItem(item)
-            }
-            return
-        }
-        let item: NSStatusItem
-        if let existing = metricItems[metric] {
-            item = existing
-        } else {
-            item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-            metricItems[metric] = item
-            item.button?.title = ""
-            item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            item.button?.appearance = nil
-            item.button?.contentTintColor = nil
-        }
-        item.menu = makeMetricMenu(metric)
+        metricMenuItems[metric]?.submenu = makeMetricMenu(metric)
         refreshMetricDisplay(metric)
     }
 
     private func refreshMetricDisplay(_ metric: Metric) {
-        let mode = settings.displayMode(for: metric)
-        let reading = readings[metric] ?? .measuring
-        let detail = reading.lines(for: metric).joined(separator: ", ")
-        let item = metricItems[metric]
-        let image = StatusGraphic.image(metric: metric, mode: mode, reading: reading,
-                                        history: histories[metric] ?? MetricHistory())
-        item?.button?.image = image
-        item?.button?.imagePosition = .imageOnly
-        item?.button?.imageScaling = .scaleNone
-        // Keep just one point of button padding per side; retain the full click height.
-        item?.length = max(18, ceil(image.size.width) + 2)
-        item?.button?.toolTip = "\(metric.title) · \(detail)"
-        item?.button?.setAccessibilityLabel("\(metric.title), \(detail), \(mode.title)")
-        if let menu = item?.menu { updateReadout(in: menu, metric: metric) }
+        let enabledMetrics = Metric.allCases.filter(settings.isEnabled)
+        let detail = enabledMetrics.map { metric in
+            let reading = readings[metric] ?? .measuring
+            return "\(metric.title): \(reading.lines(for: metric).joined(separator: ", "))"
+        }.joined(separator: " · ")
         if let menu = metricMenuItems[metric]?.submenu { updateReadout(in: menu, metric: metric) }
+        let images = Metric.allCases.filter(settings.isEnabled).map { metric in
+            StatusGraphic.image(metric: metric, mode: settings.displayMode(for: metric),
+                               reading: readings[metric] ?? .measuring,
+                               history: histories[metric] ?? MetricHistory())
+        }
+        let image = StatusGraphic.combined(images)
+        statusItem?.button?.image = image
+        statusItem?.button?.imagePosition = .imageOnly
+        statusItem?.button?.imageScaling = .scaleNone
+        statusItem?.length = max(18, ceil(image.size.width) + 2)
+        statusItem?.button?.title = enabledMetrics.isEmpty ? "SM" : ""
+        statusItem?.button?.toolTip = enabledMetrics.isEmpty ? "SysMon — Your Mac, at a glance." : detail
+        statusItem?.button?.setAccessibilityLabel(enabledMetrics.isEmpty
+            ? "SysMon, all metrics hidden"
+            : "SysMon, \(detail)")
+    }
+
+    private func refreshCombinedDisplay() {
+        if let metric = Metric.allCases.first { refreshMetricDisplay(metric) }
     }
 
     private func updateReadout(in menu: NSMenu, metric: Metric) {

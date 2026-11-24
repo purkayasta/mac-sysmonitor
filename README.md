@@ -32,14 +32,15 @@ A small, native home for your Mac’s system stats. Right in the menu bar.
 | Network | Physical Ethernet/Wi-Fi receive and transmit rates | Text · Mini graph · Both |
 | Disk I/O | Aggregated block-driver read and write rates | Text · Mini graph · Both |
 
-Every metric has its own saved visibility and display settings. A shared refresh
-interval defaults to **3 seconds**. Native Swift and AppKit keep the app focused;
+Every metric has its own saved visibility and display settings. All six metrics
+start hidden by default; use the **SM** recovery item to enable the ones you want.
+The shared refresh interval defaults to **3 seconds**. Native Swift and AppKit keep the app focused;
 there are no third-party runtime dependencies.
 
 Collection runs in a background actor. Hidden metrics stop sampling, and each
 graph retains at most 60 samples. Network and disk rates use 64-bit byte counters
 and actual elapsed time; new or reset devices establish a fresh baseline.
-Byte values use binary units such as KiB, MiB, and GiB.
+Readouts use compact B, KB, MB, GB, and TB units (scaled in powers of 1024).
 
 GPU readings depend on the driver's IOKit statistics. RAM estimates exclude
 reclaimable file-cache and purgeable pages; they may differ from Activity Monitor.
@@ -50,7 +51,7 @@ I/O, so a read served entirely from memory cache can correctly report no disk I/
 ## 🎛 Make it yours
 
 Open the app from Applications or Launchpad to see all active settings. You can
-also click or right-click any metric and choose **Settings…**.
+click the combined menu bar indicator and use a metric submenu to open its settings.
 
 | Control | What it does |
 | --- | --- |
@@ -66,17 +67,17 @@ Closing with unsaved edits offers **Save and Close**, **Cancel**, or
 macOS login item and can also be managed in **System Settings → General → Login Items**.
 Changes made
 directly in the menu bar apply immediately. To stop the app, choose
-**any metric → Quit SysMon**. The refresh interval controls live sampling.
+the combined menu bar item → **Quit SysMon**. The refresh interval controls live sampling.
 
-The **SM** recovery menu appears only when all metrics are hidden. Use it to
-restore metrics through Settings.
+If all metrics are hidden, **SM** appears as the recovery indicator. Use its menu
+to restore metrics through Settings. Metrics share one menu bar item, with subtle dividers between them.
 
 **Menu bar icons:** native symbols identify each metric; network readings use
-aligned download/upload arrows. Compact values omit spaces before units.
+aligned download/upload arrows. Compact values include a space before KB/MB/GB units.
 Hover or open a metric for its full name and details. Stacked readings are centered.
 **RAM layout:** used memory is on top, physical capacity below, without extra labels.
-**Network layout:** download is on top, upload below. Disk read appears above
-write. Unavailable samples leave gaps in graphs instead of fabricated readings.
+**Compact labels:** U = used, T = total, D = download, U = upload, R = read,
+W = write. Each pair is stacked and aligned. Unavailable samples leave gaps in graphs instead of fabricated readings.
 
 ### Follows your Mac
 

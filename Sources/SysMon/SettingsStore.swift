@@ -64,7 +64,7 @@ final class SettingsStore {
         self.defaults = defaults
         var registration: [String: Any] = [Self.intervalKey: Self.defaultInterval, Self.launchAtLoginKey: false]
         for metric in Metric.allCases {
-            registration[visibilityKey(metric)] = true
+            registration[visibilityKey(metric)] = false
             registration[modeKey(metric)] = DisplayMode.text.rawValue
         }
         defaults.register(defaults: registration)

@@ -14,14 +14,42 @@ enum StatusGraphic {
         case .disk: name = "internaldrive"
         }
         return NSImage(systemSymbolName: name, accessibilityDescription: metric.title)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 12, weight: .medium))
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .medium))
+    }
+
+    static func combined(_ images: [NSImage], gap: CGFloat = 9) -> NSImage {
+        let visible = images.filter { $0.size.width > 0 }
+        let separatorWidth: CGFloat = 1
+        let separatorCount = max(0, visible.count - 1)
+        let width = visible.reduce(CGFloat.zero) { $0 + $1.size.width }
+            + CGFloat(separatorCount) * (gap + separatorWidth)
+        let result = NSImage(size: NSSize(width: width, height: 22))
+        result.lockFocus()
+        var x: CGFloat = 0
+        for (index, image) in visible.enumerated() {
+            image.draw(at: NSPoint(x: x, y: 0), from: .zero, operation: .sourceOver, fraction: 1)
+            x += image.size.width
+            if index < visible.count - 1 {
+                x += gap / 2
+                let separator = NSBezierPath()
+                separator.lineWidth = separatorWidth
+                separator.move(to: NSPoint(x: x, y: 5))
+                separator.line(to: NSPoint(x: x, y: 17))
+                NSColor.black.setStroke()
+                separator.stroke()
+                x += gap / 2 + separatorWidth
+            }
+        }
+        result.unlockFocus()
+        result.isTemplate = true
+        return result
     }
 
     static func image(metric: Metric, mode: DisplayMode, reading: MetricReading = .measuring,
                       history: MetricHistory = MetricHistory()) -> NSImage {
         let hasText = mode != .graph
         let hasGraph = mode != .text
-        let dual = metric == .network || metric == .disk
+        let dual = [.network, .disk, .memory, .swap].contains(metric)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
             .foregroundColor: NSColor.black,
@@ -32,28 +60,38 @@ enum StatusGraphic {
         let labels: [String]
         if !hasText {
             labels = icon == nil ? [metric.shortName] : []
-        } else if dual || metric == .memory {
+        } else if dual {
             labels = values
         } else {
             labels = [values[0]]
         }
         // Measure the actual labels instead of reserving a wide, mostly empty slot.
         let padding: CGFloat = 1
-        let prefixes = hasText && dual ? (metric == .network ? ["↓", "↑"] : ["R", "W"]) : []
+        let prefixes: [String]
+        if hasText {
+            switch metric {
+            case .memory, .swap: prefixes = ["U", "T"]
+            case .network: prefixes = ["D", "U"]
+            case .disk: prefixes = ["R", "W"]
+            case .cpu, .gpu: prefixes = []
+            }
+        } else {
+            prefixes = []
+        }
         let prefixWidth = ceil(prefixes.map { ($0 as NSString).size(withAttributes: attributes).width }.max() ?? 0)
         let prefixColumnWidth = prefixes.isEmpty ? 0 : prefixWidth + 1
         let textWidth = ceil(labels.map { ($0 as NSString).size(withAttributes: attributes).width }.max() ?? 0)
-        let iconWidth: CGFloat = icon == nil ? 0 : 12
+        let iconWidth: CGFloat = icon == nil ? 0 : 13
         let textStart = padding + iconWidth + (icon != nil && !labels.isEmpty ? 1 : 0)
         let valueStart = textStart + prefixColumnWidth
         let contentEnd = valueStart + textWidth
-        let graphStart = contentEnd + 2
-        let size = NSSize(width: hasGraph ? graphStart + 24 + padding : contentEnd + padding, height: 22)
+        let graphStart = contentEnd + 1
+        let size = NSSize(width: hasGraph ? graphStart + 20 + padding : contentEnd + padding, height: 22)
         let image = NSImage(size: size)
         image.lockFocus()
         if let icon {
             // Aspect-fit symbols in one centered slot so every metric aligns.
-            let scale = min(iconWidth / icon.size.width, 12 / icon.size.height)
+            let scale = min(iconWidth / icon.size.width, 13 / icon.size.height)
             let iconSize = NSSize(width: icon.size.width * scale, height: icon.size.height * scale)
             let bounds = NSRect(x: padding + (iconWidth - iconSize.width) / 2,
                                 y: (size.height - iconSize.height) / 2,
@@ -63,8 +101,7 @@ enum StatusGraphic {
         for (index, label) in labels.enumerated() {
             let y: CGFloat = labels.count == 2 ? (index == 0 ? 11 : 0) : 5
             let width = (label as NSString).size(withAttributes: attributes).width
-            // Direction markers have their own gutter; unequal rates must not
-            // move the arrows or R/W labels out of alignment (including zero).
+            // Abbreviations have a fixed gutter so unequal or zero values align.
             if !prefixes.isEmpty {
                 let prefix = prefixes[index] as NSString
                 let prefixX = textStart + (prefixWidth - prefix.size(withAttributes: attributes).width) / 2
@@ -82,7 +119,7 @@ enum StatusGraphic {
                 let path = NSBezierPath()
                 path.lineWidth = 1
                 var drawing = false
-                let step = 24.0 / CGFloat(MetricHistory.limit - 1)
+                let step = 20.0 / CGFloat(MetricHistory.limit - 1)
                 for (index, point) in history.points.enumerated() {
                     guard let point else { drawing = false; continue }
                     let raw = lane == 0 ? point.primary : point.secondary
@@ -94,7 +131,7 @@ enum StatusGraphic {
                 if history.points.allSatisfy({ $0 == nil }) {
                     path.setLineDash([2, 2], count: 2, phase: 0)
                     path.move(to: NSPoint(x: graphStart, y: bounds.0))
-                    path.line(to: NSPoint(x: graphStart + 24, y: bounds.0))
+                    path.line(to: NSPoint(x: graphStart + 20, y: bounds.0))
                 }
                 path.stroke()
             }

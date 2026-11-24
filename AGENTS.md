@@ -4,7 +4,7 @@
 
 ## Project Structure & Module Organization
 
-`SysMon` is a dependency-free Swift/AppKit menu bar app for Apple Silicon, targeting macOS 13+. `Sources/SysMon/main.swift` owns app lifecycle, menus, and saved preferences; `StatusGraphic.swift` renders compact indicators. `Package.swift` defines the executable package. `Resources/` contains bundle metadata, the master icon, its generation prompt, and the packaged `.icns`. Build scripts live in `scripts/`; generated binaries, caches, and app bundles belong in ignored `.build/` and `dist/` directories. Swift fixture, integration, and AppKit lifecycle checks live in `Tests/`; no SwiftPM test target exists yet.
+`SysMon` is a dependency-free Swift/AppKit menu bar app for Apple Silicon, targeting macOS 13+. `Sources/SysMon/main.swift` owns app lifecycle, menus, and saved preferences; `StatusGraphic.swift` renders compact indicators combined into one menu bar item. `Package.swift` defines the executable package. `Resources/` contains bundle metadata, the master icon, its generation prompt, and the packaged `.icns`. Build scripts live in `scripts/`; generated binaries, caches, and app bundles belong in ignored `.build/` and `dist/` directories. Swift fixture, integration, and AppKit lifecycle checks live in `Tests/`; no SwiftPM test target exists yet.
 
 Use **SysMon — Your Mac, at a glance.** for the product name and tagline. Keep **Made with Codex.** in the README. The executable, package target, and app bundle are `SysMon`, `SysMon`, and `SysMon.app`. Keep the stable bundle identifier `dev.local.mac-sysmonitor` and persisted preference keys unless a migration is explicitly requested. The existing GitHub repository slug is `mac-sysmonitor`; app-name compatibility fallbacks have been removed.
 
@@ -14,10 +14,10 @@ Use **SysMon — Your Mac, at a glance.** for the product name and tagline. Keep
 
 ## Build, Test, and Development Commands
 
-- `bash scripts/build-app.sh`: compile an optimized arm64 executable, package `dist/SysMon.app`, and apply a free local ad-hoc signature. Shows staged progress.
+- `bash scripts/build-app.sh`: compile an optimized arm64 executable, package `dist/SysMon.app`, and apply a free local ad-hoc signature.
 - `open dist/SysMon.app`: launch the menu bar app. Quit an existing copy before relaunching a rebuild.
 - `bash scripts/update-app.sh`: update an existing `/Applications/SysMon.app`; use `--app dist/SysMon.app` for a development copy. A running app is asked to quit and then reopened; a closed app stays closed.
-- `bash scripts/uninstall.sh --app /Applications/SysMon.app --purge`: move that copy to Trash and delete preferences after a successful move. Omit `--purge` to keep preferences; use `--dry-run` to preview. Shows staged progress.
+- `bash scripts/uninstall.sh --app /Applications/SysMon.app --purge`: move that copy to Trash and delete preferences after a successful move. Omit `--purge` to keep preferences; use `--dry-run` to preview.
 - `bash scripts/build-icon.sh`: regenerate icon sizes and `.icns`; requires macOS image tools and Swift for its fallback.
 - `bash scripts/test.sh`: run all Swift checks; requires a graphical macOS session and includes a 65-second delayed-quit responsiveness check.
 - `codesign --verify --strict dist/SysMon.app`: verify the built bundle’s signature.
@@ -47,7 +47,7 @@ Use concise imperative subjects, such as `Add network sampling`. PRs should desc
 
 ## Performance & Security
 
-Keep the default refresh interval at three seconds. All six collectors are implemented; never present synthetic readings as real data. Keep native reads off the main actor, limit histories to 60 samples, and stop disabled collectors. CPU and throughput need a baseline; report measuring or unavailable states accurately. Use actual elapsed time, 64-bit I/O counters, and per-device baselines to handle hot-plug and resets. GPU counters are driver-dependent. Never commit signing keys or credentials; local ad-hoc signing is not public-release notarization.
+Keep all metric visibility defaults disabled so first launch shows the SM recovery item; keep the default refresh interval at three seconds. All six collectors are implemented; never present synthetic readings as real data. Keep native reads off the main actor, limit histories to 60 samples, and stop disabled collectors. CPU and throughput need a baseline; report measuring or unavailable states accurately. Use actual elapsed time, 64-bit I/O counters, and per-device baselines to handle hot-plug and resets. GPU counters are driver-dependent. Never commit signing keys or credentials; local ad-hoc signing is not public-release notarization.
 
 After explicit uninstall confirmation (or a Terminal uninstall command), close every matching SysMon instance before touching app files. Force-close copies that refuse normal quit, with that behavior disclosed to the user. Exclude the helper and unrelated apps; fail without deleting preferences if shutdown fails. Removing the selected bundle must still precede preference removal.
 

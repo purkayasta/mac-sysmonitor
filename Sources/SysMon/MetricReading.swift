@@ -32,16 +32,23 @@ struct MetricReading: Sendable, Equatable {
     }
 
     func compactText(for metric: Metric) -> [String] {
-        guard state == .available else { return metric == .network || metric == .disk || metric == .memory ? ["—", "—"] : ["—"] }
+        guard state == .available else {
+            return [.network, .disk, .memory, .swap].contains(metric) ? ["—", "—"] : ["—"]
+        }
         switch metric {
         case .cpu, .gpu: return [Self.percent(primary)]
         case .memory: return [Self.compactBytes(primary), Self.compactBytes(capacity)]
-        case .swap: return [Self.compactBytes(primary)]
+        case .swap: return [Self.compactBytes(primary), Self.compactBytes(capacity)]
         case .network, .disk: return [Self.compactBytes(primary) + "/s", Self.compactBytes(secondary) + "/s"]
         }
     }
 
-    private static func compactBytes(_ value: Double) -> String { bytes(value).replacingOccurrences(of: " ", with: "") }
+    private static func compactBytes(_ value: Double) -> String {
+        bytes(value).replacingOccurrences(of: "KiB", with: "KB")
+            .replacingOccurrences(of: "MiB", with: "MB")
+            .replacingOccurrences(of: "GiB", with: "GB")
+            .replacingOccurrences(of: "TiB", with: "TB")
+    }
 
     static func percent(_ value: Double) -> String { String(format: "%.0f%%", value) }
     static func rate(_ value: Double) -> String { bytes(value) + "/s" }
