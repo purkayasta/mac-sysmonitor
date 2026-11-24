@@ -108,8 +108,8 @@ saved in `.build/lifecycle-test-output.log`. A passing responsiveness check cove
 the exercised path; report any additional manual checks or untested failure paths.
 
 Use native AppKit controls, semantic colors, system fonts, and accessibility
-labels. Keep the settings layout stable in both appearances. Pending edits must
-survive Cancel when closing or quitting. Keep blocking IPC and process waits off
+labels. Keep the settings layout stable in both appearances. Saving applies edits and closes Settings. Pending edits must survive Cancel when
+closing or quitting. Keep blocking IPC and process waits off
 the UI thread, and avoid blocking Swift's cooperative executor with Apple Event
 reply waits. Preserve the updater's wait for an explicit quit decision.
 
@@ -135,9 +135,10 @@ and `Resources/Info.plist`.
 1. Create a branch for your change and follow the [repository guidelines](AGENTS.md).
 2. Run the relevant checks above. For UI changes, verify all six metrics in all
    three display modes, the **Save** action, recovery of hidden indicators via
-   **SM**, saved preferences after relaunch, light and dark appearance, and
-   network ordering with download above upload. Exercise Save, Cancel, and Discard
-   for both closing Settings and quitting, and verify responsiveness during dialogs.
+   the **SM** fallback when all metrics are hidden, saved preferences after
+   relaunch, light and dark appearance, compact icon alignment at zero and unequal
+   readings, and network ordering with download above upload. Verify Save closes
+   Settings; exercise Save, Cancel, and Discard for pending edits on close and quit.
 3. Commit with a concise imperative subject. Keep generated builds and
    credentials out of Git.
 4. Open a pull request with the behavior change, validation performed, and

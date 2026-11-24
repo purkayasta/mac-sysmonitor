@@ -1,5 +1,6 @@
 import AppKit
 import Darwin
+import ServiceManagement
 
 #if !arch(arm64)
 #error("SysMon supports Apple Silicon (arm64) only.")
@@ -22,21 +23,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var samplingConfiguration = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = "SM"
-        item.button?.toolTip = "SysMon — Your Mac, at a glance."
-        // Let the status bar choose its own contrast/highlight colors and backing.
-        item.button?.appearance = nil
-        item.button?.contentTintColor = nil
-        item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        item.menu = makeMenu()
-        statusItem = item
         for metric in Metric.allCases {
             updateIndicator(for: metric)
         }
+        updateRecoveryItem()
         startSampling()
         showSettings()
         DispatchQueue.main.async { [weak self] in self?.reportUpdateReady() }
+    }
+
+    private func updateRecoveryItem() {
+        guard metricItems.isEmpty else {
+            if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
+            statusItem = nil
+            return
+        }
+        guard statusItem == nil else { return }
+        // Keep a route back to Settings when the last metric is hidden.
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.button?.title = "SM"
+        item.button?.toolTip = "SysMon — Your Mac, at a glance."
+        item.button?.setAccessibilityLabel("SysMon, all metrics hidden")
+        item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        item.menu = makeMenu()
+        statusItem = item
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -116,11 +126,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func applySettings(_ changes: SettingsChanges) {
+        var changes = changes
+        if let launchAtLogin = changes.launchAtLogin {
+            do {
+                if launchAtLogin { try SMAppService.mainApp.register() }
+                else { try SMAppService.mainApp.unregister() }
+                settings.setLaunchAtLogin(launchAtLogin)
+            } catch {
+                changes.launchAtLogin = nil
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = "Could not change Login Item"
+                alert.informativeText = "\(error.localizedDescription)\n\nYou can manage SysMon in System Settings → General → Login Items."
+                alert.addButton(withTitle: "Open Login Items")
+                alert.addButton(withTitle: "OK")
+                if alert.runModal() == .alertFirstButtonReturn { SMAppService.openSystemSettingsLoginItems() }
+            }
+        }
         let applied = settings.apply(changes)
         for metric in Metric.allCases where applied.visibility[metric] != nil || applied.modes[metric] != nil {
             metricMenuItems[metric]?.submenu = makeMetricMenu(metric)
             updateIndicator(for: metric)
         }
+        updateRecoveryItem()
         if let seconds = applied.interval {
             for option in intervalMenu.items {
                 option.state = option.tag == seconds ? .on : .off
@@ -137,6 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func makeMenu() -> NSMenu {
+        intervalMenu.removeAllItems()
         let menu = NSMenu()
         let heading = NSMenuItem(title: "SysMon", action: nil, keyEquivalent: "")
         menu.addItem(heading)
@@ -174,9 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(intervalItem)
         menu.addItem(.separator())
         menu.addItem(makeUninstallItem())
-        let quit = NSMenuItem(title: "Quit SysMon", action: #selector(quitApp), keyEquivalent: "q")
-        quit.target = self
-        menu.addItem(quit)
+        menu.addItem(makeQuitItem())
         return menu
     }
 
@@ -214,7 +241,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(makeSettingsItem())
         menu.addItem(makeUninstallItem())
+        menu.addItem(makeQuitItem())
         return menu
+    }
+
+    private func makeQuitItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Quit SysMon", action: #selector(quitApp), keyEquivalent: "q")
+        item.target = self
+        return item
     }
 
     private func makeUninstallItem() -> NSMenuItem {
@@ -268,8 +302,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let reading = readings[metric] ?? .measuring
         let detail = reading.lines(for: metric).joined(separator: ", ")
         let item = metricItems[metric]
-        item?.button?.image = StatusGraphic.image(metric: metric, mode: mode, reading: reading,
-                                                 history: histories[metric] ?? MetricHistory())
+        let image = StatusGraphic.image(metric: metric, mode: mode, reading: reading,
+                                        history: histories[metric] ?? MetricHistory())
+        item?.button?.image = image
+        item?.button?.imagePosition = .imageOnly
+        item?.button?.imageScaling = .scaleNone
+        // Keep just one point of button padding per side; retain the full click height.
+        item?.length = max(18, ceil(image.size.width) + 2)
         item?.button?.toolTip = "\(metric.title) · \(detail)"
         item?.button?.setAccessibilityLabel("\(metric.title), \(detail), \(mode.title)")
         if let menu = item?.menu { updateReadout(in: menu, metric: metric) }

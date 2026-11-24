@@ -59,13 +59,19 @@ if [ -e "$APP_PATH" ]; then
     else
         HELPER_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sysmon-uninstall.XXXXXXXX")"
         trap 'rm -rf -- "$HELPER_DIR"' EXIT
-        swiftc -swift-version 6 -module-cache-path "$HELPER_DIR/ModuleCache" \
+        # Reuse the build cache; a fresh cache recompiles Apple's Swift modules.
+        MODULE_CACHE="$PROJECT_DIR/.build/ModuleCache"
+        mkdir -p "$MODULE_CACHE"
+        progress() { printf '\r[%-20s] %3d%% %s\n' "$1" "$2" "$3"; }
+        progress '██░░░░░░░░░░░░░░░░░░' 10 'Preparing uninstaller'
+        swiftc -swift-version 6 -module-cache-path "$MODULE_CACHE" \
             "$PROJECT_DIR/Sources/SysMon/AppRemoval.swift" \
             "$PROJECT_DIR/Sources/SysMon/AppInstanceShutdown.swift" \
             "$PROJECT_DIR/scripts/stop-running-apps.swift" -o "$HELPER_DIR/stop-running-apps"
-        "$HELPER_DIR/stop-running-apps" || fail 'Could not stop all SysMon instances. The app and saved settings were kept.'
-        swift "$PROJECT_DIR/scripts/move-to-trash.swift" "$APP_PATH" ||
-            fail 'Could not move the app to Trash. Saved settings were kept.'
+        progress '████████░░░░░░░░░░░░' 40 'Closing SysMon instances'
+        "$HELPER_DIR/stop-running-apps" "$APP_PATH" ||
+            fail 'Could not complete uninstall. Saved settings were kept.'
+        progress '████████████████████' 100 'Complete'
         printf 'Moved to Trash: %s\n' "$APP_PATH"
     fi
 else

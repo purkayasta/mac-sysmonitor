@@ -167,16 +167,16 @@ struct ScriptTests {
                 cat > "$destination" <<'HELPER'
                 #!/bin/bash
                 echo stop >> "$TEST_LOG"
-                [ "$TEST_STOP_FAIL" = 0 ]
+                [ "$TEST_STOP_FAIL" = 0 ] || exit 1
+                if [ "$#" = 1 ]; then
+                    echo trash >> "$TEST_LOG"
+                    [ "$TEST_TRASH_FAIL" = 0 ] || exit 1
+                    /bin/mv "$1" "$TEST_TRASH/"
+                fi
                 HELPER
                 chmod +x "$destination"
                 """#)
-                try f.mock("swift", #"""
-                [ "${1##*/}" = move-to-trash.swift ] || exit 2
-                echo trash >> "$TEST_LOG"
-                [ "$TEST_TRASH_FAIL" = 0 ] || exit 1
-                /bin/mv "$2" "$TEST_TRASH/"
-                """#)
+                try f.mock("swift", "echo 'Unexpected second Swift compilation' >&2; exit 1")
                 try f.mock("defaults", #"echo "$1 $2" >> "$TEST_LOG""#)
                 var args = ["--app", f.path(app).path]
                 switch name {

@@ -9,6 +9,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private var toggles: [Metric: NSButton] = [:]
     private var modes: [Metric: NSPopUpButton] = [:]
     private let intervalControl = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let launchAtLoginControl = NSButton(checkboxWithTitle: "Launch at Login", target: nil, action: nil)
     private let saveButton = NSButton(title: "Save", target: nil, action: nil)
     private var pending = SettingsChanges()
 
@@ -49,6 +50,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let seconds = settings.interval
         if pending.interval == seconds { pending.interval = nil }
         intervalControl.selectItem(withTag: pending.interval ?? seconds)
+        if pending.launchAtLogin == settings.launchAtLogin { pending.launchAtLogin = nil }
+        launchAtLoginControl.state = (pending.launchAtLogin ?? settings.launchAtLogin) ? .on : .off
         updateSaveButton()
     }
 
@@ -137,6 +140,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         intervalRow.alignment = .firstBaseline
         intervalRow.distribution = .fill
         intervalRow.spacing = 16
+        launchAtLoginControl.target = self
+        launchAtLoginControl.action = #selector(changeLaunchAtLogin)
+        launchAtLoginControl.setAccessibilityLabel("Launch SysMon when you log in")
         let note = NSTextField(wrappingLabelWithString: "Live readings refresh at the selected interval. Hidden metrics stop collecting. Download appears above upload; disk read appears above write.")
         note.font = .systemFont(ofSize: 12)
         note.textColor = .secondaryLabelColor
@@ -148,7 +154,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         actions.orientation = .horizontal
         actions.addView(uninstall, in: .leading)
         actions.addView(saveButton, in: .trailing)
-        return page(views: [identity, grid, intervalRow, note], actions: actions)
+        return page(views: [identity, grid, intervalRow, launchAtLoginControl, note], actions: actions)
     }
 
     private func page(views: [NSView], actions: NSStackView) -> NSView {
@@ -195,6 +201,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         updateSaveButton()
     }
 
+    @objc private func changeLaunchAtLogin() {
+        let enabled = launchAtLoginControl.state == .on
+        pending.launchAtLogin = enabled == settings.launchAtLogin ? nil : enabled
+        updateSaveButton()
+    }
+
     private func updateSaveButton() {
         saveButton.isEnabled = !pending.isEmpty
         window?.isDocumentEdited = saveButton.isEnabled
@@ -206,6 +218,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         pending = SettingsChanges()
         updateSaveButton()
         onSave(changes)
+        window?.performClose(nil)
     }
 
     @objc private func uninstallApp() { onUninstall() }

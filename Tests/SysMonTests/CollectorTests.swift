@@ -111,6 +111,11 @@ struct CollectorTests {
         history.append(.unavailable("Read failed"), for: .cpu)
         try expect(history.points.count == MetricHistory.limit && history.points.last! == nil, "Missing readings must leave graph gaps")
         try expect(MetricReading.bytes(1024) == "1.0 KiB", "Binary units are incorrect")
+        let memory = MetricReading(state: .available, primary: 15 * pow(1024, 3), capacity: 24 * pow(1024, 3))
+        try expect(memory.compactText(for: .memory) == ["15GiB", "24GiB"], "RAM must expose used and total memory")
+        for reading in [MetricReading.measuring, .unavailable("No counter")] {
+            try expect(reading.compactText(for: .memory) == ["—", "—"], "Missing RAM must not show fabricated capacity")
+        }
         print("PASS history: 60-sample cap, normalization, missing-data gaps, and binary units")
 
         let slow = CounterFixture()

@@ -34,7 +34,8 @@ open dist/SysMon.app
 ```
 
 Wait for `Built .../dist/SysMon.app`. The settings window opens on launch,
-and **SM** and enabled metric indicators appear in the menu bar.
+and enabled metric indicators appear in the menu bar. An **SM** recovery menu
+appears only when all metrics are hidden.
 
 ### 4. Keep it in Applications
 
@@ -42,7 +43,7 @@ and **SM** and enabled metric indicators appear in the menu bar.
 open dist
 ```
 
-Quit the test copy using **SM → Quit SysMon**, then drag **SysMon.app** into
+Quit the test copy using **any metric → Quit SysMon**, then drag **SysMon.app** into
 **Applications** in Finder and launch that copy. You can also launch it from Launchpad if listed.
 Keep the source folder if you want to [update later](#update) or use the
 [Terminal uninstaller](#from-terminal).
@@ -69,7 +70,8 @@ installation, follow [Build and try it](#3-build-and-try-it) instead.
 bash scripts/update-app.sh --app dist/SysMon.app
 ```
 
-The command builds and verifies the new bundle before asking a running copy to
+The command shows staged progress while compiling, signing, and installing the
+new bundle. It verifies the new bundle before asking a running copy to
 quit. Builds with the save-on-quit prompt let you save or discard pending edits,
 or cancel the update. If the app was open, the command reopens it from the same
 location. If startup fails, it tries to restore and reopen the previous copy.
@@ -85,7 +87,7 @@ recovery location until you have restored or verified the app.
 
 ### From the app — easiest
 
-1. Click or right-click **SM** or any metric.
+1. Click or right-click any metric (or **SM** if all metrics are hidden).
 2. Choose **Uninstall SysMon…**, also available in the settings window.
 3. Optionally check **Also remove saved settings**.
 4. Choose **Move to Trash**, or **Cancel** to keep the app.
@@ -122,7 +124,8 @@ Add **`--dry-run`** to preview changes. Use `--app "/full/path/SysMon.app"`
 for another location. Each run moves only that copy. The command uses the Swift
 toolchain from the build instructions. You can also move the app to Trash in Finder.
 
-The Terminal command also force-closes instances that refuse to quit. Running it
+The Terminal command shows progress while preparing its helper and closing
+instances. It also force-closes instances that refuse to quit. Running it
 authorizes discarding their pending settings; `--dry-run` describes the actions
 without stopping processes or removing files.
 

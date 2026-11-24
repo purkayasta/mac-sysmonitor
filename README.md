@@ -50,21 +50,31 @@ I/O, so a read served entirely from memory cache can correctly report no disk I/
 ## 🎛 Make it yours
 
 Open the app from Applications or Launchpad to see all active settings. You can
-also click or right-click **SM** or any metric and choose **Settings…**.
+also click or right-click any metric and choose **Settings…**.
 
 | Control | What it does |
 | --- | --- |
 | Show in menu bar | Show or hide each metric independently |
 | Display mode | Choose **Text**, **Mini graph**, or **Text + mini graph** |
 | Refresh interval | Choose **1, 2, 3, 5, 10, or 30 seconds**; default **3** |
-| SM menu | Restore hidden metrics, open settings, quit, or uninstall |
+| Launch at Login | Optionally start SysMon when you sign in; off by default |
+| Metric menu | Open settings, quit, or uninstall |
 
-Click **Save** in the settings window to apply your changes together. Closing
-the window with unsaved edits offers **Save and Close**, **Cancel**, or
-**Close Without Saving**; the app keeps running. Changes made
+Click **Save** in the settings window to apply your changes and close the window.
+Closing with unsaved edits offers **Save and Close**, **Cancel**, or
+**Close Without Saving**; the app keeps running. Launch at Login uses the native
+macOS login item and can also be managed in **System Settings → General → Login Items**.
+Changes made
 directly in the menu bar apply immediately. To stop the app, choose
-**SM → Quit SysMon**. The refresh interval controls live sampling.
+**any metric → Quit SysMon**. The refresh interval controls live sampling.
 
+The **SM** recovery menu appears only when all metrics are hidden. Use it to
+restore metrics through Settings.
+
+**Menu bar icons:** native symbols identify each metric; network readings use
+aligned download/upload arrows. Compact values omit spaces before units.
+Hover or open a metric for its full name and details. Stacked readings are centered.
+**RAM layout:** used memory is on top, physical capacity below, without extra labels.
 **Network layout:** download is on top, upload below. Disk read appears above
 write. Unavailable samples leave gaps in graphs instead of fabricated readings.
 
@@ -95,7 +105,7 @@ coverage, and preview images.
 
 ## 🔎 Troubleshooting
 
-- **Settings is closed.** Choose **SM → Settings…**, or launch the app again.
+- **Settings is closed.** Choose **any metric → Settings…**, or launch the app again.
 - **Measuring…** CPU and rate collectors need two samples; wait one refresh interval.
 - **Unavailable.** Open the metric menu for the specific counter failure. GPU
   utilization can be unavailable when the driver does not expose it.

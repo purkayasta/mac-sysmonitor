@@ -48,19 +48,21 @@ struct SettingsChanges {
     var visibility: [Metric: Bool] = [:]
     var modes: [Metric: DisplayMode] = [:]
     var interval: Int?
+    var launchAtLogin: Bool?
 
-    var isEmpty: Bool { visibility.isEmpty && modes.isEmpty && interval == nil }
+    var isEmpty: Bool { visibility.isEmpty && modes.isEmpty && interval == nil && launchAtLogin == nil }
 }
 
 final class SettingsStore {
     static let intervals = [1, 2, 3, 5, 10, 30]
     private static let defaultInterval = 3
     private static let intervalKey = "refreshIntervalSeconds"
+    private static let launchAtLoginKey = "launchAtLogin"
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        var registration: [String: Any] = [Self.intervalKey: Self.defaultInterval]
+        var registration: [String: Any] = [Self.intervalKey: Self.defaultInterval, Self.launchAtLoginKey: false]
         for metric in Metric.allCases {
             registration[visibilityKey(metric)] = true
             registration[modeKey(metric)] = DisplayMode.text.rawValue
@@ -78,6 +80,10 @@ final class SettingsStore {
     func displayMode(for metric: Metric) -> DisplayMode {
         DisplayMode(rawValue: defaults.string(forKey: modeKey(metric)) ?? "") ?? .text
     }
+
+    var launchAtLogin: Bool { defaults.bool(forKey: Self.launchAtLoginKey) }
+
+    func setLaunchAtLogin(_ enabled: Bool) { defaults.set(enabled, forKey: Self.launchAtLoginKey) }
 
     var interval: Int {
         let seconds = defaults.integer(forKey: Self.intervalKey)
@@ -97,6 +103,10 @@ final class SettingsStore {
         if let seconds = changes.interval, Self.intervals.contains(seconds), seconds != interval {
             defaults.set(seconds, forKey: Self.intervalKey)
             applied.interval = seconds
+        }
+        if let enabled = changes.launchAtLogin, enabled != launchAtLogin {
+            defaults.set(enabled, forKey: Self.launchAtLoginKey)
+            applied.launchAtLogin = enabled
         }
         return applied
     }

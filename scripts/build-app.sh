@@ -28,20 +28,28 @@ trap 'if [ ! -e "$STAGING_DIR/.keep-for-recovery" ]; then rm -rf -- "$STAGING_DI
 STAGED_APP="$STAGING_DIR/SysMon.app"
 mkdir -p "$STAGED_APP/Contents/MacOS" "$STAGED_APP/Contents/Resources"
 
+progress() { printf '\r[%-20s] %3d%% %s\n' "$1" "$2" "$3"; }
+
 # Compile directly: this dependency-free starter does not need package resolution.
+progress '██░░░░░░░░░░░░░░░░░░' 10 'Compiling SysMon'
 swiftc -O -swift-version 6 \
     -target arm64-apple-macosx13.0 \
     -module-cache-path "$MODULE_CACHE" \
     Sources/SysMon/*.swift -o "$STAGED_APP/Contents/MacOS/SysMon"
+progress '████████░░░░░░░░░░░░' 40 'Packaging app resources'
 cp Resources/Info.plist "$STAGED_APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$STAGED_APP/Contents/Resources/AppIcon.icns"
 
+progress '████████████░░░░░░░░' 60 'Signing app'
 # Ad-hoc signing is free and intended for local development only.
 codesign --force --sign - "$STAGED_APP"
 codesign --verify --strict "$STAGED_APP"
+progress '███████████████░░░░░' 75 'Preparing installer'
 swiftc -swift-version 6 -module-cache-path "$MODULE_CACHE" \
     Sources/SysMon/AppRemoval.swift scripts/QuitRequest.swift scripts/install-built-app.swift -o "$STAGING_DIR/install-built-app"
+progress '██████████████████░░' 90 'Installing app'
 "$STAGING_DIR/install-built-app" "$MODE" "$STAGED_APP" "$APP_DIR"
+progress '████████████████████' 100 'Complete'
 if [ "$MODE" = update ]; then
     printf 'Updated %s\n' "$APP_DIR"
 else

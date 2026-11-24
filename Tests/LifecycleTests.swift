@@ -41,6 +41,7 @@ struct LifecycleTests {
             return
         }
         try settingsTests()
+        try indicatorLayoutTests()
         try await renderNativeUI()
         try await shutdownFixtureTests()
         try await quitTests()
@@ -123,6 +124,57 @@ struct LifecycleTests {
             }
         }
         print("PASS settings: clean, Save, Cancel, and Discard for both close and quit")
+    }
+
+    @MainActor
+    private static func indicatorLayoutTests() throws {
+        let small = MetricReading(state: .available, primary: 0, capacity: 24 * pow(1024, 3))
+        let large = MetricReading(state: .available, primary: 999 * pow(1024, 3), secondary: 888 * pow(1024, 3), capacity: pow(1024, 4))
+        for metric in Metric.allCases {
+            try check(StatusGraphic.symbol(for: metric) != nil, "Missing native icon for \(metric.title)")
+            for reading in [small, large, .measuring, .unavailable("No counter")] {
+                let text = StatusGraphic.image(metric: metric, mode: .text, reading: reading)
+                let both = StatusGraphic.image(metric: metric, mode: .combined, reading: reading)
+                let graph = StatusGraphic.image(metric: metric, mode: .graph, reading: reading)
+                try check(text.size.height == 22 && both.size.height == 22 && graph.size.height == 22,
+                          "Indicators must fit the menu bar in every state")
+                try check(both.size.width == text.size.width + 26, "Graph must follow the label with a small gap")
+                try check(graph.isTemplate && text.accessibilityDescription != nil, "Native contrast and accessible readings must survive layout changes")
+            }
+        }
+        let network = StatusGraphic.image(metric: .network, mode: .text, reading: small)
+        try check(network.size.width < 50, "Low network rates still reserve excessive space")
+        try check(StatusGraphic.image(metric: .network, mode: .text, reading: large).size.width > network.size.width,
+                  "Large rates must have enough room instead of clipping")
+        // Compare rendered pixels in the icon/marker gutter as values change.
+        // Centering an entire "arrow + value" row would shift this artwork.
+        func gutterPixels(_ image: NSImage, width: CGFloat) -> [UInt8] {
+            let gutter = NSImage(size: NSSize(width: width, height: 22))
+            gutter.lockFocus()
+            NSColor.clear.setFill()
+            NSRect(x: 0, y: 0, width: width, height: 22).fill(using: .copy)
+            image.draw(at: .zero, from: NSRect(x: 0, y: 0, width: width, height: 22), operation: .sourceOver, fraction: 1)
+            gutter.unlockFocus()
+            let bitmap = NSBitmapImageRep(data: gutter.tiffRepresentation!)!
+            return (0..<bitmap.pixelsHigh).flatMap { y in
+                (0..<bitmap.pixelsWide).map { x in
+                    UInt8((bitmap.colorAt(x: x, y: y)!.alphaComponent * 255).rounded())
+                }
+            }
+        }
+        for metric in Metric.allCases {
+            for mode in [DisplayMode.text, .combined] {
+                let gutterWidth: CGFloat = metric == .network ? 9 : (metric == .disk ? 21 : 13)
+                let zero = gutterPixels(StatusGraphic.image(metric: metric, mode: mode, reading: small), width: gutterWidth)
+                let mixed = MetricReading(state: .available, primary: 0, secondary: large.secondary, capacity: large.capacity)
+                let reversed = MetricReading(state: .available, primary: large.primary, secondary: 0, capacity: large.capacity)
+                for reading in [mixed, reversed, large, .measuring, .unavailable("No counter")] {
+                    let actual = gutterPixels(StatusGraphic.image(metric: metric, mode: mode, reading: reading), width: gutterWidth)
+                    try check(actual == zero, "\(metric.title) icons or markers moved for unequal or missing readings")
+                }
+            }
+        }
+        print("PASS indicator layout: compact widths, large readings, all modes, and missing-data states")
     }
 
     @MainActor
