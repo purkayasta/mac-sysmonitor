@@ -97,8 +97,8 @@ and check that the main actor stays responsive. Native modal-dialog checks also
 verify that AppKit continues processing events. Light/dark settings and indicator
 previews are written to `.build/` for visual inspection.
 
-The current suite has six removal safety checks and 20 script integration cases,
-plus native lifecycle checks. All test code is Swift; `Package.swift` has no test
+The current suite has six removal safety checks and 22 script integration cases,
+plus collector and native lifecycle checks. All test code is Swift; `Package.swift` has no test
 target, so use `bash scripts/test.sh` rather than `swift test`. For a focused
 removal check, run `bash scripts/test-app-removal.sh`.
 
@@ -112,6 +112,17 @@ labels. Keep the settings layout stable in both appearances. Pending edits must
 survive Cancel when closing or quitting. Keep blocking IPC and process waits off
 the UI thread, and avoid blocking Swift's cooperative executor with Apple Event
 reply waits. Preserve the updater's wait for an explicit quit decision.
+
+Collector tests live in `Tests/SysMonTests/CollectorTests.swift` and exercise
+counter rollover/reset, device changes, actual elapsed time, zero readings,
+disabled collectors, unavailable counters, bounded history, and slow sampling
+without main-actor stalls. Native smoke checks read all six collectors on the
+current Mac; a driver can legitimately omit GPU utilization counters.
+
+Uninstall shutdown tests cover multiple copies, exclusion of the helper and
+unrelated apps, graceful and forced exits, newly appearing copies, cancellation,
+and failure. Two explicitly spawned AppKit fixtures also refuse normal quit so
+the force-close path is verified without touching installed SysMon instances.
 
 The stable bundle identifier and preference domain are `dev.local.mac-sysmonitor`;
 the source target, executable, and app bundle are `SysMon`, `SysMon`, and `SysMon.app`.

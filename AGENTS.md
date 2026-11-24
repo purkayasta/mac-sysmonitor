@@ -10,6 +10,8 @@ Use **SysMon — Your Mac, at a glance.** for the product name and tagline. Keep
 
 `SettingsStore.swift` manages preferences; `SettingsWindowController.swift` manages pending edits and Save/Cancel/Discard confirmation. `AppUninstaller.swift` hands removal to a helper after quit; `AppRemoval.swift` validates bundle identity before removal. `scripts/install-built-app.swift` installs signed bundles and handles update recovery; `scripts/QuitRequest.swift` waits for a quit-event reply off the UI thread.
 
+`SystemSampler.swift` owns actor-isolated sampling baselines; `NativeSystemCounters.swift` reads Mach, sysctl, and IOKit counters. `MetricReading.swift` formats readings and bounds graph history. `AppInstanceShutdown.swift` closes all matching SysMon instances during authorized uninstall, excluding its own helper and unrelated applications; it requests normal quit before a bounded force-quit fallback.
+
 ## Build, Test, and Development Commands
 
 - `bash scripts/build-app.sh`: compile an optimized arm64 executable, package `dist/SysMon.app`, and apply a free local ad-hoc signature.
@@ -35,7 +37,7 @@ Use native AppKit controls, dialogs, semantic colors, and system fonts. Preserve
 
 Run `bash scripts/test.sh` for the standalone Swift checks; there is no coverage threshold configured. For UI changes, build and manually verify all six metrics across all three display modes, toggle recovery through SM, preference persistence after relaunch, and light/dark appearance. Network download stays above upload. For future collector logic, add focused tests under `Tests/SysMonTests/` and register a package test target before using `swift test`.
 
-All test code must be Swift. The suite runs six removal safety checks, 20 script integration cases, settings close/quit decisions, native modal event handling, light/dark control bounds and alignment, and delayed-quit responsiveness. The delayed cancellation takes 65 seconds; allow more than one minute for the suite. Tests use isolated preferences, temporary bundles, and mocked destructive/publishing commands. Keep tests independent of installed copies and real GitHub access. Preview images and lifecycle logs belong in `.build/`.
+All test code must be Swift. The suite runs six removal safety checks, 22 script integration cases, collector logic and native-counter smoke checks, multi-instance shutdown checks, settings close/quit decisions, native modal event handling, light/dark control bounds and alignment, and delayed-quit responsiveness. The delayed cancellation takes 65 seconds; allow more than one minute for the suite. Tests use isolated preferences, temporary bundles, explicitly launched helper apps, and mocked destructive/publishing commands. Keep tests independent of installed copies and real GitHub access. Preview images and lifecycle logs belong in `.build/`.
 
 For UI or IPC changes, verify event-loop responsiveness and delayed cancellation, rather than claiming universal freedom from freezes. Tests must report completion explicitly so early native-process termination cannot silently skip checks.
 
@@ -45,6 +47,8 @@ Use concise imperative subjects, such as `Add network sampling`. PRs should desc
 
 ## Performance & Security
 
-Keep the default refresh interval at three seconds. Collectors are not implemented yet; never present synthetic readings as real data. Bound future history buffers and stop disabled collectors. Never commit signing keys or credentials; local ad-hoc signing is not public-release notarization.
+Keep the default refresh interval at three seconds. All six collectors are implemented; never present synthetic readings as real data. Keep native reads off the main actor, limit histories to 60 samples, and stop disabled collectors. CPU and throughput need a baseline; report measuring or unavailable states accurately. Use actual elapsed time, 64-bit I/O counters, and per-device baselines to handle hot-plug and resets. GPU counters are driver-dependent. Never commit signing keys or credentials; local ad-hoc signing is not public-release notarization.
+
+After explicit uninstall confirmation (or a Terminal uninstall command), close every matching SysMon instance before touching app files. Force-close copies that refuse normal quit, with that behavior disclosed to the user. Exclude the helper and unrelated apps; fail without deleting preferences if shutdown fails. Removing the selected bundle must still precede preference removal.
 
 Update, install, and uninstall accept bundles named `SysMon.app` only and must validate their identity before replacement or removal. Preserve recovery files marked `.keep-for-recovery` when an update cannot finish. Keep generated outputs out of commits; if the user requests a clean `dist/`, verify builds in a temporary checkout and remove that temporary output afterward.

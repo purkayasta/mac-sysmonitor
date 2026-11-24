@@ -35,8 +35,14 @@ struct LifecycleTests {
             try modalResponsivenessTest()
             return
         }
+        try await shutdownTests()
+        if CommandLine.arguments.dropFirst().contains("--shutdown") {
+            try await shutdownFixtureTests()
+            return
+        }
         try settingsTests()
-        try renderNativeUI()
+        try await renderNativeUI()
+        try await shutdownFixtureTests()
         try await quitTests()
         print("Passed settings close/quit, native appearance, and asynchronous quit responsiveness checks.")
     }
@@ -120,13 +126,21 @@ struct LifecycleTests {
     }
 
     @MainActor
-    private static func renderNativeUI() throws {
+    private static func renderNativeUI() async throws {
         let domain = "dev.local.mac-sysmonitor.tests.\(UUID())"
         let defaults = UserDefaults(suiteName: domain)!
         defer { defaults.removePersistentDomain(forName: domain) }
         let controller = SettingsWindowController(settings: SettingsStore(defaults: defaults), onSave: { _ in }, onUninstall: {})
         let content = controller.window!.contentView!
         let directory = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
+        let sampler = SystemSampler()
+        var readings: [Metric: MetricReading] = [:]
+        var histories: [Metric: MetricHistory] = [:]
+        for _ in 0..<3 {
+            readings = await sampler.sample(enabled: Set(Metric.allCases))
+            for (metric, reading) in readings { histories[metric, default: MetricHistory()].append(reading, for: metric) }
+            try await Task.sleep(for: .milliseconds(100))
+        }
         var lightFrames: [NSRect] = []
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             controller.window!.appearance = NSAppearance(named: appearance)
@@ -150,7 +164,8 @@ struct LifecycleTests {
                 NSRect(x: 0, y: 0, width: 450, height: 240).fill()
                 for (row, metric) in Metric.allCases.enumerated() {
                     for (column, mode) in DisplayMode.allCases.enumerated() {
-                        let image = StatusGraphic.image(metric: metric, mode: mode)
+                        let image = StatusGraphic.image(metric: metric, mode: mode, reading: readings[metric] ?? .measuring,
+                                                        history: histories[metric] ?? MetricHistory())
                         precondition(image.isTemplate && image.accessibilityDescription != nil)
                         // Tint template pixels for the preview as AppKit does in the status bar.
                         let tinted = NSImage(size: image.size)
@@ -168,6 +183,39 @@ struct LifecycleTests {
             try png.write(to: directory.appendingPathComponent("indicators-\(name).png"))
         }
         print("PASS native appearance: control bounds and all 18 indicators; light/dark previews saved in .build")
+    }
+
+    @MainActor
+    private static func shutdownFixtureTests() async throws {
+        var processes: [Process] = []
+        var readyFiles: [URL] = []
+        defer {
+            for process in processes where process.isRunning { kill(process.processIdentifier, SIGKILL) }
+            for file in readyFiles { try? FileManager.default.removeItem(at: file) }
+        }
+        for _ in 0..<2 {
+            let ready = FileManager.default.temporaryDirectory.appendingPathComponent("SysMon-shutdown-\(UUID())")
+            readyFiles.append(ready)
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+                .deletingLastPathComponent().appendingPathComponent("quit-fixture")
+            process.arguments = ["65", "cancel", ready.path]
+            try process.run()
+            processes.append(process)
+            let deadline = ContinuousClock.now + .seconds(10)
+            while !FileManager.default.fileExists(atPath: ready.path) {
+                try check(process.isRunning && ContinuousClock.now < deadline, "Shutdown fixture failed to launch")
+                try await Task.sleep(for: .milliseconds(20))
+            }
+        }
+        // Address fixture PIDs explicitly so this test cannot stop installed apps.
+        let applications = processes.compactMap { NSRunningApplication(processIdentifier: $0.processIdentifier) }
+        try check(applications.count == 2, "Fixture applications were not registered")
+        let fixtureCopies = applications.map(FixtureUninstallProcess.init)
+        try await AppInstanceShutdown.stopAll(gracePeriod: .milliseconds(200), forcePeriod: .seconds(3),
+                                              runningApplications: { fixtureCopies })
+        try check(applications.allSatisfy(\.isTerminated), "Force shutdown left fixture instances running")
+        print("PASS shutdown integration: two real AppKit instances that refuse quit were force-closed")
     }
 
     @MainActor

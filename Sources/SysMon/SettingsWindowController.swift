@@ -137,7 +137,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         intervalRow.alignment = .firstBaseline
         intervalRow.distribution = .fill
         intervalRow.spacing = 16
-        let note = NSTextField(wrappingLabelWithString: "Live metric collection is coming next. Indicators currently show no data. Download appears above upload.")
+        let note = NSTextField(wrappingLabelWithString: "Live readings refresh at the selected interval. Hidden metrics stop collecting. Download appears above upload; disk read appears above write.")
         note.font = .systemFont(ofSize: 12)
         note.textColor = .secondaryLabelColor
         let uninstall = NSButton(title: "Uninstall SysMon…", target: self, action: #selector(uninstallApp))

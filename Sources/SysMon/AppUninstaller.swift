@@ -19,10 +19,6 @@ enum AppUninstaller {
             showError("Move the app to Applications and launch that copy before uninstalling.")
             return nil
         }
-        guard !anotherCopyIsRunning else {
-            showError("Quit other running copies of SysMon, then try again.")
-            return nil
-        }
 
         let bundle: AppRemoval.Identity
         let executable: URL
@@ -38,7 +34,7 @@ enum AppUninstaller {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Uninstall SysMon?"
-        alert.informativeText = "The app will quit and this copy will move to Trash. Other copies and source files will remain.\n\nLocation: \(appURL.path)"
+        alert.informativeText = "All running SysMon instances will close, and this copy will move to Trash. Instances that do not quit will be force-closed; their unsaved settings may be discarded. Other app copies and source files will remain on disk.\n\nLocation: \(appURL.path)"
         alert.addButton(withTitle: "Cancel")
         alert.addButton(withTitle: "Move to Trash")
         alert.showsSuppressionButton = true
@@ -71,10 +67,15 @@ enum AppUninstaller {
         return channel.fileHandleForWriting
     }
 
-    static func finishAfterQuit() -> Int32 {
+    static func finishAfterQuit() async -> Int32 {
         var input = stat()
-        guard fstat(STDIN_FILENO, &input) == 0, input.st_mode & S_IFMT == S_IFIFO,
-              let data = try? FileHandle.standardInput.readToEnd(),
+        guard fstat(STDIN_FILENO, &input) == 0, input.st_mode & S_IFMT == S_IFIFO else { return EXIT_FAILURE }
+        let data: Data? = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(returning: try? FileHandle.standardInput.readToEnd())
+            }
+        }
+        guard let data,
               let request = try? JSONDecoder().decode(Request.self, from: data),
               request.processID > 1 else { return EXIT_FAILURE }
 
@@ -85,12 +86,11 @@ enum AppUninstaller {
             guard ContinuousClock.now < deadline else {
                 return reportFailure("The running app did not exit.")
             }
-            Thread.sleep(forTimeInterval: 0.05)
-        }
-        guard !anotherCopyIsRunning else {
-            return reportFailure("Another copy of SysMon is running.")
+            do { try await Task.sleep(for: .milliseconds(50)) }
+            catch { return reportFailure("Uninstall was interrupted.") }
         }
         do {
+            try await AppInstanceShutdown.stopAll()
             try AppRemoval.perform(
                 bundleURL: Bundle.main.bundleURL,
                 removeSettings: request.removeSettings,
@@ -106,11 +106,6 @@ enum AppUninstaller {
         } catch {
             return reportFailure(error.localizedDescription)
         }
-    }
-
-    private static var anotherCopyIsRunning: Bool {
-        NSRunningApplication.runningApplications(withBundleIdentifier: AppRemoval.bundleIdentifier)
-            .contains { !$0.isTerminated && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
     }
 
     private static func reportFailure(_ reason: String) -> Int32 {

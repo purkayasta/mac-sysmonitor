@@ -17,15 +17,12 @@ Move dist/SysMon.app to Trash by default.
   --dry-run    Show the actions without changing anything.
   --help       Show this help.
 
-Quit SysMon before uninstalling. Source files and build caches are kept.
+All running SysMon instances will close; unresponsive instances will be force-closed.
+Unsaved settings in those instances may be discarded. Source files and build caches are kept.
 HELP
 }
 
 fail() { printf '%s\n' "$*" >&2; exit 1; }
-
-app_is_running() {
-    pgrep -x SysMon >/dev/null
-}
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -56,12 +53,17 @@ if [ -e "$APP_PATH" ]; then
     PLIST="$APP_PATH/Contents/Info.plist"
     ACTUAL_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST" 2>/dev/null)" || fail 'Cannot read the app bundle identifier.'
     [ "$ACTUAL_ID" = "$BUNDLE_ID" ] || fail "Refusing to remove a different app: $ACTUAL_ID"
-    if ! "$DRY_RUN" && app_is_running; then
-        fail 'Quit SysMon using SM → Quit SysMon, then retry.'
-    fi
     if "$DRY_RUN"; then
+        printf 'Would close all running SysMon instances, force-closing any that remain.\n'
         printf 'Would move to Trash: %s\n' "$APP_PATH"
     else
+        HELPER_DIR="$(mktemp -d "${TMPDIR:-/tmp}/sysmon-uninstall.XXXXXXXX")"
+        trap 'rm -rf -- "$HELPER_DIR"' EXIT
+        swiftc -swift-version 6 -module-cache-path "$HELPER_DIR/ModuleCache" \
+            "$PROJECT_DIR/Sources/SysMon/AppRemoval.swift" \
+            "$PROJECT_DIR/Sources/SysMon/AppInstanceShutdown.swift" \
+            "$PROJECT_DIR/scripts/stop-running-apps.swift" -o "$HELPER_DIR/stop-running-apps"
+        "$HELPER_DIR/stop-running-apps" || fail 'Could not stop all SysMon instances. The app and saved settings were kept.'
         swift "$PROJECT_DIR/scripts/move-to-trash.swift" "$APP_PATH" ||
             fail 'Could not move the app to Trash. Saved settings were kept.'
         printf 'Moved to Trash: %s\n' "$APP_PATH"
@@ -75,9 +77,7 @@ if "$PURGE"; then
     if "$DRY_RUN"; then
         printf 'Would delete preferences: %s (current user)\n' "$BUNDLE_ID"
     else
-        if app_is_running; then
-            fail 'Quit SysMon before deleting preferences.'
-        fi
+        "$HELPER_DIR/stop-running-apps" || fail 'Could not stop all SysMon instances. Saved settings were kept.'
         if defaults read "$BUNDLE_ID" >/dev/null 2>&1; then
             defaults delete "$BUNDLE_ID"
             printf 'Deleted preferences: %s\n' "$BUNDLE_ID"

@@ -90,14 +90,16 @@ recovery location until you have restored or verified the app.
 3. Optionally check **Also remove saved settings**.
 4. Choose **Move to Trash**, or **Cancel** to keep the app.
 
-The app quits before its helper moves that copy to Trash. Other copies, source
-files, and build caches stay in place. Settings are kept unless you select their
-removal. If the move fails, the helper shows an error and keeps your settings.
-Quit any other running copies before uninstalling.
+After confirmation, the app quits and its helper closes every running SysMon
+instance. Copies that refuse a normal quit are force-closed after a short wait;
+their unsaved settings may be discarded. The helper moves only the selected
+bundle to Trash. Other app copies, source files, and build caches stay on disk.
+Settings are kept unless you select their removal. If any instance cannot be
+stopped or the move fails, an error is shown and your settings are kept.
 
 ### From Terminal
 
-Quit the app first. To move the Applications copy to Trash:
+To close all running SysMon instances and move the Applications copy to Trash:
 
 ```sh
 bash scripts/uninstall.sh --app /Applications/SysMon.app
@@ -119,6 +121,10 @@ bash scripts/uninstall.sh --purge  # Also remove settings
 Add **`--dry-run`** to preview changes. Use `--app "/full/path/SysMon.app"`
 for another location. Each run moves only that copy. The command uses the Swift
 toolchain from the build instructions. You can also move the app to Trash in Finder.
+
+The Terminal command also force-closes instances that refuse to quit. Running it
+authorizes discarding their pending settings; `--dry-run` describes the actions
+without stopping processes or removing files.
 
 The app path must be an actual `SysMon.app` directory; symlinks and unrelated
 bundles are rejected. If that copy is already absent, the command exits without

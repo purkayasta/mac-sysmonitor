@@ -13,27 +13,39 @@ A small, native home for your Mac’s system stats. Right in the menu bar.
 [Development setup](CONTRIBUTING.md#set-up-the-development-environment) · [Contributing](CONTRIBUTING.md#submit-a-change) · [Report a bug](CONTRIBUTING.md#report-a-bug) · [Contact](CONTACT.md)
 
 > [!IMPORTANT]
-> **Early development preview.** The settings window, menu bar indicators, display
-> modes, and uninstall flow are implemented. **Live metric collection is still
-> pending.** Dashes and empty graphs mean no data—not zero usage.
+> **Early development preview.** CPU, GPU, memory, swap, network, and disk collectors
+> now feed live menu bar readings and graphs. A collector starts with **Measuring…**
+> while establishing its baseline. **Unavailable** reports a failed or unsupported
+> counter; a dash never represents measured zero usage.
 >
 > There is no published DMG or Homebrew package yet. Installation currently means
 > building from source. Intel Macs are not supported.
 
-## ✨ What’s taking shape
+## ✨ Live metrics
 
-| Metric | Planned readings | Display options available now |
+| Metric | Readings | Display options |
 | --- | --- | --- |
-| CPU | Processor usage | Text · Mini graph · Both |
-| GPU | GPU usage, where supported | Text · Mini graph · Both |
-| RAM | Memory usage | Text · Mini graph · Both |
-| Swap | Swap usage | Text · Mini graph · Both |
-| Network | Download above upload | Text · Mini graph · Both |
-| Disk I/O | Read and write rates | Text · Mini graph · Both |
+| CPU | System-wide usage between samples | Text · Mini graph · Both |
+| GPU | Busiest device's reported utilization, where exposed by the driver | Text · Mini graph · Both |
+| RAM | Estimated used memory and physical capacity | Text · Mini graph · Both |
+| Swap | Used and currently allocated swap | Text · Mini graph · Both |
+| Network | Physical Ethernet/Wi-Fi receive and transmit rates | Text · Mini graph · Both |
+| Disk I/O | Aggregated block-driver read and write rates | Text · Mini graph · Both |
 
 Every metric has its own saved visibility and display settings. A shared refresh
 interval defaults to **3 seconds**. Native Swift and AppKit keep the app focused;
 there are no third-party runtime dependencies.
+
+Collection runs in a background actor. Hidden metrics stop sampling, and each
+graph retains at most 60 samples. Network and disk rates use 64-bit byte counters
+and actual elapsed time; new or reset devices establish a fresh baseline.
+Byte values use binary units such as KiB, MiB, and GiB.
+
+GPU readings depend on the driver's IOKit statistics. RAM estimates exclude
+reclaimable file-cache and purgeable pages; they may differ from Activity Monitor.
+Network rates aggregate physical `en*` interfaces, including LAN traffic, and
+exclude VPN/bridge interfaces to avoid double-counting. Disk rates reflect driver
+I/O, so a read served entirely from memory cache can correctly report no disk I/O.
 
 ## 🎛 Make it yours
 
@@ -51,11 +63,10 @@ Click **Save** in the settings window to apply your changes together. Closing
 the window with unsaved edits offers **Save and Close**, **Cancel**, or
 **Close Without Saving**; the app keeps running. Changes made
 directly in the menu bar apply immediately. To stop the app, choose
-**SM → Quit SysMon**. The refresh interval will control sampling once
-collectors are implemented.
+**SM → Quit SysMon**. The refresh interval controls live sampling.
 
-**Network layout:** download is on top, upload below. The current indicators use
-empty states until real network measurements are connected.
+**Network layout:** download is on top, upload below. Disk read appears above
+write. Unavailable samples leave gaps in graphs instead of fabricated readings.
 
 ### Follows your Mac
 
@@ -85,14 +96,16 @@ coverage, and preview images.
 ## 🔎 Troubleshooting
 
 - **Settings is closed.** Choose **SM → Settings…**, or launch the app again.
-- **Only dashes or empty graphs.** Collectors are still in development.
+- **Measuring…** CPU and rate collectors need two samples; wait one refresh interval.
+- **Unavailable.** Open the metric menu for the specific counter failure. GPU
+  utilization can be unavailable when the driver does not expose it.
 - For build or launch issues, see the [installation guide](INSTALL.md#troubleshooting).
 - After a crash, [find and read the macOS crash report](CONTRIBUTING.md#find-and-read-a-crash-report).
 
 ## 🚧 Next up
 
-- [ ] CPU and memory collectors
-- [ ] Swap, network, disk I/O, and supported GPU counters
-- [ ] Live graphs with bounded history and disabled-collector shutdown
+- [x] CPU and memory collectors
+- [x] Swap, network, disk I/O, and supported GPU counters
+- [x] Live graphs with bounded history and disabled-collector shutdown
 - [ ] CPU, memory, and energy profiling on Apple Silicon
 - [ ] Signed GitHub releases, DMG packaging, and a Homebrew cask

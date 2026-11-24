@@ -14,6 +14,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let intervalMenu = NSMenu()
     private var settingsController: SettingsWindowController?
     private var uninstallChannel: FileHandle?
+    private let sampler = SystemSampler()
+    private var samplingTask: Task<Void, Never>?
+    private var readings: [Metric: MetricReading] = [:]
+    private var histories: [Metric: MetricHistory] = [:]
+    private var lastSampleTime: Date?
+    private var samplingConfiguration = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -28,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for metric in Metric.allCases {
             updateIndicator(for: metric)
         }
+        startSampling()
         showSettings()
         DispatchQueue.main.async { [weak self] in self?.reportUpdateReady() }
     }
@@ -40,6 +47,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if uninstallChannel != nil { return .terminateNow }
         return settingsController?.confirmQuit() == false ? .terminateCancel : .terminateNow
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        samplingTask?.cancel()
+    }
+
+    private func startSampling() {
+        samplingTask?.cancel()
+        samplingConfiguration += 1
+        let configuration = samplingConfiguration
+        let enabled = Set(Metric.allCases.filter { settings.isEnabled($0) })
+        readings = readings.filter { enabled.contains($0.key) }
+        histories = histories.filter { enabled.contains($0.key) }
+        guard !enabled.isEmpty else {
+            // Reset baselines when everything is disabled, without reading counters.
+            let sampler = sampler
+            samplingTask = Task { _ = await sampler.sample(enabled: [], configuration: configuration) }
+            return
+        }
+        let seconds = settings.interval
+        let sampler = sampler
+        samplingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                let samples = await sampler.sample(enabled: enabled, configuration: configuration)
+                guard !Task.isCancelled else { return }
+                self?.receive(samples)
+                do { try await Task.sleep(for: .seconds(seconds)) }
+                catch { return }
+            }
+        }
+    }
+
+    private func receive(_ samples: [Metric: MetricReading]) {
+        lastSampleTime = Date()
+        for (metric, reading) in samples {
+            readings[metric] = reading
+            histories[metric, default: MetricHistory()].append(reading, for: metric)
+            refreshMetricDisplay(metric)
+        }
     }
 
     private func reportUpdateReady() {
@@ -80,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 option.state = option.tag == seconds ? .on : .off
             }
         }
+        if !applied.visibility.isEmpty || applied.interval != nil { startSampling() }
         settingsController?.refresh()
     }
 
@@ -95,7 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(heading)
         menu.addItem(makeSettingsItem())
         let notice = NSMenuItem(
-            title: "Setup ready · metric collection coming next",
+            title: "Live system metrics",
             action: nil,
             keyEquivalent: ""
         )
@@ -141,7 +188,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func makeMetricMenu(_ metric: Metric) -> NSMenu {
         let menu = NSMenu(title: metric.title)
         menu.addItem(NSMenuItem(title: metric.title, action: nil, keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "No data · collector not implemented yet", action: nil, keyEquivalent: ""))
+        for index in 0..<3 {
+            let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+            item.tag = 1000 + index
+            menu.addItem(item)
+        }
+        updateReadout(in: menu, metric: metric)
         menu.addItem(.separator())
 
         let toggle = NSMenuItem(title: "Show in menu bar", action: #selector(toggleMetric(_:)), keyEquivalent: "")
@@ -207,11 +259,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.button?.appearance = nil
             item.button?.contentTintColor = nil
         }
-        let mode = settings.displayMode(for: metric)
-        item.button?.image = StatusGraphic.image(metric: metric, mode: mode)
-        item.button?.toolTip = "\(metric.title) · \(mode.title) · No data"
-        item.button?.setAccessibilityLabel("\(metric.title), no data, \(mode.title)")
         item.menu = makeMetricMenu(metric)
+        refreshMetricDisplay(metric)
+    }
+
+    private func refreshMetricDisplay(_ metric: Metric) {
+        let mode = settings.displayMode(for: metric)
+        let reading = readings[metric] ?? .measuring
+        let detail = reading.lines(for: metric).joined(separator: ", ")
+        let item = metricItems[metric]
+        item?.button?.image = StatusGraphic.image(metric: metric, mode: mode, reading: reading,
+                                                 history: histories[metric] ?? MetricHistory())
+        item?.button?.toolTip = "\(metric.title) · \(detail)"
+        item?.button?.setAccessibilityLabel("\(metric.title), \(detail), \(mode.title)")
+        if let menu = item?.menu { updateReadout(in: menu, metric: metric) }
+        if let menu = metricMenuItems[metric]?.submenu { updateReadout(in: menu, metric: metric) }
+    }
+
+    private func updateReadout(in menu: NSMenu, metric: Metric) {
+        let enabled = settings.isEnabled(metric)
+        var lines = enabled ? (readings[metric] ?? .measuring).lines(for: metric) : ["Collection paused · hidden from menu bar"]
+        if enabled, readings[metric]?.state == .available, let lastSampleTime {
+            lines.append("Updated \(lastSampleTime.formatted(date: .omitted, time: .standard))")
+        }
+        for index in 0..<3 {
+            let item = menu.item(withTag: 1000 + index)
+            item?.isHidden = index >= lines.count
+            if index < lines.count { item?.title = lines[index] }
+        }
     }
 
     @objc private func quitApp() {
@@ -224,7 +299,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 if CommandLine.arguments.count == 2, CommandLine.arguments[1] == AppUninstaller.finishArgument {
-    exit(AppUninstaller.finishAfterQuit())
+    // Keep AppKit's event loop alive while the helper waits asynchronously for
+    // other copies to exit. This also refreshes NSRunningApplication state.
+    let helperApp = NSApplication.shared
+    helperApp.setActivationPolicy(.prohibited)
+    Task { @MainActor in exit(await AppUninstaller.finishAfterQuit()) }
+    helperApp.run()
+    exit(EXIT_FAILURE)
 }
 
 let app = NSApplication.shared

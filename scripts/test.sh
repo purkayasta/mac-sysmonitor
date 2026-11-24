@@ -5,6 +5,11 @@ cd "$PROJECT_DIR"
 mkdir -p .build/ModuleCache
 bash scripts/test-app-removal.sh
 swiftc -swift-version 6 -module-cache-path .build/ModuleCache \
+    Sources/SysMon/SettingsStore.swift Sources/SysMon/MetricReading.swift \
+    Sources/SysMon/SystemSampler.swift Sources/SysMon/NativeSystemCounters.swift \
+    Tests/SysMonTests/CollectorTests.swift -o .build/collector-tests
+.build/collector-tests
+swiftc -swift-version 6 -module-cache-path .build/ModuleCache \
     Sources/SysMon/AppRemoval.swift scripts/QuitRequest.swift scripts/install-built-app.swift \
     -o .build/install-built-app-tests
 swiftc -parse-as-library -swift-version 6 -module-cache-path .build/ModuleCache \
@@ -14,7 +19,10 @@ swiftc -parse-as-library -swift-version 6 -module-cache-path .build/ModuleCache 
     Tests/QuitFixture.swift -o .build/quit-fixture
 swiftc -swift-version 6 -module-cache-path .build/ModuleCache \
     Sources/SysMon/SettingsStore.swift Sources/SysMon/SettingsWindowController.swift \
-    Sources/SysMon/StatusGraphic.swift scripts/QuitRequest.swift Tests/LifecycleTests.swift \
+    Sources/SysMon/StatusGraphic.swift Sources/SysMon/AppRemoval.swift Sources/SysMon/AppInstanceShutdown.swift \
+    Sources/SysMon/MetricReading.swift \
+    Sources/SysMon/SystemSampler.swift Sources/SysMon/NativeSystemCounters.swift \
+    scripts/QuitRequest.swift Tests/ShutdownTests.swift Tests/LifecycleTests.swift \
     -o .build/lifecycle-tests
 .build/lifecycle-tests --modal
 LIFECYCLE_LOG="$PROJECT_DIR/.build/lifecycle-test-output.log"

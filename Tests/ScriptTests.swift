@@ -147,7 +147,7 @@ struct ScriptTests {
         }
 
         // Destructive commands target fixtures or mocks only.
-        for name in ["dry run", "scoped repeatable removal", "purge after move", "failed move", "absent bundle", "other identifier", "symlink", "invalid arguments"] {
+        for name in ["dry run", "scoped repeatable removal", "purge after move", "failed move", "failed shutdown", "helper compile failure", "absent bundle", "other identifier", "symlink", "invalid arguments"] {
             try test("uninstall: " + name) { f in
                 let app = "folder with spaces/SysMon.app"
                 try f.bundle(app)
@@ -156,7 +156,21 @@ struct ScriptTests {
                 f.environment["TEST_TRASH"] = f.path("Trash").path
                 f.environment["TEST_LOG"] = f.path("operations.log").path
                 f.environment["TEST_TRASH_FAIL"] = "0"
-                try f.mock("pgrep", "exit 1")
+                f.environment["TEST_STOP_FAIL"] = "0"
+                f.environment["TEST_COMPILE_FAIL"] = "0"
+                try f.mock("swiftc", #"""
+                if [ "$TEST_COMPILE_FAIL" = 1 ]; then
+                    echo 'Could not compile shutdown helper' >&2
+                    exit 1
+                fi
+                destination="${!#}"
+                cat > "$destination" <<'HELPER'
+                #!/bin/bash
+                echo stop >> "$TEST_LOG"
+                [ "$TEST_STOP_FAIL" = 0 ]
+                HELPER
+                chmod +x "$destination"
+                """#)
                 try f.mock("swift", #"""
                 [ "${1##*/}" = move-to-trash.swift ] || exit 2
                 echo trash >> "$TEST_LOG"
@@ -171,6 +185,12 @@ struct ScriptTests {
                 case "failed move":
                     args += ["--purge"]
                     f.environment["TEST_TRASH_FAIL"] = "1"
+                case "failed shutdown":
+                    args += ["--purge"]
+                    f.environment["TEST_STOP_FAIL"] = "1"
+                case "helper compile failure":
+                    args += ["--purge"]
+                    f.environment["TEST_COMPILE_FAIL"] = "1"
                 case "absent bundle": args = ["--app", f.path("missing/SysMon.app").path, "--purge"]
                 case "other identifier":
                     let data = try PropertyListSerialization.data(fromPropertyList: ["CFBundleIdentifier": "example.other.app"], format: .xml, options: 0)
@@ -193,13 +213,18 @@ struct ScriptTests {
                     try expect(!f.exists(app) && f.exists(moved) && f.exists("keep.txt"), "Removal scope incorrect")
                     let repeated = try f.script("uninstall.sh", args)
                     try expect(repeated.status == 0 && repeated.output.contains("already absent"), repeated.error)
-                    try expect(f.read("operations.log") == "trash\n", "Unexpected operations")
+                    try expect(f.read("operations.log") == "stop\ntrash\n", "Unexpected operations")
                 case "purge after move":
                     try expect(result.status == 0, result.error)
-                    try expect(f.read("operations.log") == "trash\nread dev.local.mac-sysmonitor\ndelete dev.local.mac-sysmonitor\n", "Purge ordering incorrect")
+                    try expect(f.read("operations.log") == "stop\ntrash\nstop\nread dev.local.mac-sysmonitor\ndelete dev.local.mac-sysmonitor\n", "Purge ordering incorrect")
                 case "failed move":
                     try expect(result.status != 0 && result.error.contains("Saved settings were kept"), result.error)
-                    try expect(f.exists(app) && f.read("operations.log") == "trash\n", "Failure changed preferences or bundle")
+                    try expect(f.exists(app) && f.read("operations.log") == "stop\ntrash\n", "Failure changed preferences or bundle")
+                case "failed shutdown":
+                    try expect(result.status != 0 && f.exists(app), "Shutdown failure removed the app")
+                    try expect(f.read("operations.log") == "stop\n", "Shutdown failure touched bundle or settings")
+                case "helper compile failure":
+                    try expect(result.status != 0 && f.exists(app) && !f.exists("operations.log"), "Compiler failure changed app or settings")
                 case "absent bundle":
                     try expect(result.status == 0 && result.output.contains("already absent"), result.error)
                     try expect(!f.exists("operations.log"), "Absent bundle triggered purge")

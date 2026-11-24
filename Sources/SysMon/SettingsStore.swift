@@ -2,7 +2,7 @@ import Foundation
 
 // Raw values are persisted identifiers from the first release. Display titles
 // can change independently.
-enum Metric: String, CaseIterable {
+enum Metric: String, CaseIterable, Sendable {
     case cpu = "CPU"
     case gpu = "GPU"
     case memory = "RAM"
@@ -30,7 +30,7 @@ enum Metric: String, CaseIterable {
     }
 }
 
-enum DisplayMode: String, CaseIterable {
+enum DisplayMode: String, CaseIterable, Sendable {
     case text = "Text"
     case graph = "Mini graph"
     case combined = "Text + mini graph"
