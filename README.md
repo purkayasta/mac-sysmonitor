@@ -1,8 +1,7 @@
 ![SysMon app icon](Resources/readme-icon.png)
 
-# SysMon — Your Mac, at a glance.
-
-Made with Codex.
+# SysMon — Your Mac, at a glance
+> Made with Codex Guided by Human 👀
 
 CPU, GPU, RAM, swap, network, and disk activity in your menu bar.
 

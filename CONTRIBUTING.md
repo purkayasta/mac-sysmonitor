@@ -2,7 +2,7 @@
 
 [README](README.md) · [Installation guide](INSTALL.md) · [Repository guidelines](AGENTS.md) · [Contact](CONTACT.md)
 
-[Report a bug](#report-a-bug) · [Crash reports](#find-and-read-a-crash-report) · [Development setup](#set-up-the-development-environment) · [Build and test](#build-and-test) · [Submit a change](#submit-a-change) · [Publish](#publish-the-private-repository)
+[Report a bug](#report-a-bug) · [Crash reports](#find-and-read-a-crash-report) · [Development setup](#set-up-the-development-environment) · [Build and test](#build-and-test) · [Submit a change](#submit-a-change)
 
 ## Report a bug
 
@@ -57,7 +57,7 @@ Command Line Tools and build your checkout. All tests use Swift; Python is not r
 | --- | --- |
 | [Sources/SysMon/](Sources/SysMon/) | App lifecycle, preferences, indicator rendering, and uninstall flow |
 | [Resources/](Resources/) | Bundle metadata, app icon, icon prompt, and README badges |
-| [scripts/](scripts/) | Build, update/recovery, icon packaging, uninstall, publishing, and test commands |
+| [scripts/](scripts/) | Build, update/recovery, icon packaging, uninstall, and test commands |
 | [Tests/](Tests/) | Standalone Swift removal, script integration, settings, appearance, and responsiveness checks |
 | `.build/`, `dist/` | Generated caches and app bundles excluded from Git |
 
@@ -143,16 +143,3 @@ and `Resources/Info.plist`.
    credentials out of Git.
 4. Open a pull request with the behavior change, validation performed, and
    known limitations. Include screenshots for visual changes.
-
-## Publish the private repository
-
-To publish on GitHub, review and commit your changes on `main`, then run
-`bash scripts/publish-private.sh` from a checkout authenticated with `gh`.
-The [publishing script](scripts/publish-private.sh) pushes committed changes only
-to the verified private repository.
-
-It expects the current branch to be `main`, an authenticated `gh` session, and
-the existing repository slug `mac-sysmonitor`. Check `git status` and review the
-diff before committing; untracked or uncommitted work is excluded from the push.
-The script checks repository visibility and origin push URLs before sending
-`main`. It does not publish a downloadable app or notarize a build.
