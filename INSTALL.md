@@ -1,8 +1,8 @@
 # Install SysMon
 
-[README](README.md) · [App settings](README.md#-make-it-yours) · [Development setup](CONTRIBUTING.md#set-up-the-development-environment) · [Report a bug](CONTRIBUTING.md#report-a-bug) · [Contact](CONTACT.md)
+[README](README.md) · [App settings](README.md#make-it-yours) · [Development setup](CONTRIBUTING.md#set-up-the-development-environment) · [Report a bug](CONTRIBUTING.md#report-a-bug) · [Contact](CONTACT.md)
 
-[Install from source](#install-from-source) · [Update](#update) · [Uninstall](#uninstall) · [Troubleshooting](#troubleshooting)
+[Install from source](#install-from-source) · [Update](#update) · [Uninstall](#uninstall) · [Troubleshooting](TROUBLESHOOTING.md)
 
 ## Install from source
 
@@ -73,7 +73,7 @@ installation, follow [Build and try it](#3-build-and-try-it) instead.
 bash scripts/update-app.sh --app dist/SysMon.app
 ```
 
-The command It verifies the new bundle before asking a running copy to
+The command verifies the new bundle before asking a running copy to
 quit. Builds with the save-on-quit prompt let you save or discard pending edits,
 or cancel the update. If the app was open, the command reopens it from the same
 location. If startup fails, it tries to restore the previous copy and reports its location
@@ -126,7 +126,7 @@ Add **`--dry-run`** to preview changes. Use `--app "/full/path/SysMon.app"`
 for another location. Each run moves only that copy. The command uses the Swift
 toolchain from the build instructions. You can also move the app to Trash in Finder.
 
-The Terminal command It also force-closes instances that refuse to quit. Running it
+The Terminal command also force-closes instances that refuse to quit. Running it
 authorizes discarding their pending settings; `--dry-run` describes the actions
 without stopping processes or removing files.
 
@@ -158,14 +158,5 @@ bundles. This leaves source files, `.build/` caches, and saved preferences in pl
 The next `bash scripts/build-app.sh` recreates `dist/SysMon.app`. Moving an app to
 Trash is reversible until you empty Trash or permanently delete that item.
 
-## Troubleshooting
-
-- **Build fails.** Check `swift --version`. If you have Xcode installed, select
-  its toolchain in **Xcode → Settings → Locations → Command Line Tools**.
-- **A downloaded build is blocked.** Use the source build instructions above.
-  Signed downloadable releases are planned.
-- **An old version keeps appearing.** Quit all copies before replacing the app.
-- **The update waits for quit.** Answer the app's Save/Cancel/Discard dialog.
-  The updater keeps waiting while that decision is pending.
-- **The app crashes.** [Find and read the crash report](CONTRIBUTING.md#find-and-read-a-crash-report),
-  then [attach it to a GitHub issue](CONTRIBUTING.md#attach-the-report-to-the-issue).
+For build, launch, update, or crash problems, see the
+[troubleshooting guide](TROUBLESHOOTING.md).
